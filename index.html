@@ -30,7 +30,11 @@
         video { transform: scaleX(-1); }
         #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
-        #pip-canvas { transform: scaleX(-1); } /* Mirror reflection for intuitive user feedback */
+        /* GPU Accelerated Sepia/Cyan Hologram Filter */
+        #pip-canvas { 
+            transform: scaleX(-1); 
+            filter: sepia(1) saturate(600%) hue-rotate(135deg) brightness(1.2) contrast(1.1);
+        } 
         @media (max-width: 640px) {
             #display-dashboard { max-width: 92vw; left: 4vw; top: 12px; }
             #pip-container { width: 138px; height: 104px; bottom: 16px; right: 16px; }
@@ -44,7 +48,6 @@
             display: inline-block;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        /* Prevent canvas scaling distortions */
         #canvas-container canvas {
             display: block;
             width: 100% !important;
@@ -224,9 +227,10 @@
         let scene = null, camera = null, renderer = null, controls = null, loadedModel = null, resolvedBones = {};
         let processingLoopActive = false, animationFrameId = null;
         let modelLoadAttempts = 0;
+        let isProcessingFrame = false; // Processing thread lock to eliminate pipeline lags
 
         // Interactive Calibration States
-        let calibrationState = 0; // 0 = Inactive, 1 = T-Pose, 2 = Left Arm, 3 = Right Arm, 4 = Left Leg, 5 = Right Leg
+        let calibrationState = 0; 
         let customBoneLengths = {};
         let latestJointCoords = null;
 
@@ -397,7 +401,7 @@
                 
                 audioSource = audioCtx.createMediaStreamSource(stream);
                 
-                // Voice bandpass filter (attenuates extreme frequencies)
+                // Voice bandpass filter
                 const hpFilter = audioCtx.createBiquadFilter();
                 hpFilter.type = "highpass";
                 hpFilter.frequency.value = 85; 
@@ -406,7 +410,7 @@
                 lpFilter.type = "lowpass";
                 lpFilter.frequency.value = 3500; 
                 
-                // Dynamics expander gate for clean noise suppression
+                // Dynamics gate
                 const gate = audioCtx.createDynamicsCompressor();
                 gate.threshold.value = -35; 
                 gate.knee.value = 10;
@@ -435,7 +439,7 @@
                 dryGainNode = audioCtx.createGain();
                 dryGainNode.gain.value = 1.0 - wetMix * 0.4; 
 
-                // routing connections
+                // Connections
                 audioSource.connect(hpFilter);
                 hpFilter.connect(lpFilter);
                 lpFilter.connect(gate);
@@ -504,13 +508,28 @@
                     const videoEl = document.getElementById('remote-video');
                     document.getElementById('pip-container').classList.remove('hidden');
                     videoEl.srcObject = remoteStream;
-                    videoEl.onloadedmetadata = () => {
-                        videoEl.play().catch(e => console.warn("Video play exception caught:", e));
-                        
-                        setupAudioDSP(remoteStream);
-                        startFrameProcessing();
-                        setStatus('connected', 'Mocap & DSP Active');
+
+                    const playAndInit = () => {
+                        videoEl.play().then(() => {
+                            setupAudioDSP(remoteStream);
+                            startFrameProcessing();
+                            setStatus('connected', 'Mocap & DSP Active');
+                        }).catch(e => {
+                            console.warn("Autoplay blocked, waiting for fallback action", e);
+                        });
                     };
+
+                    // Multi-event bind to ensure media activation triggers securely
+                    videoEl.onloadedmetadata = playAndInit;
+                    videoEl.onloadeddata = playAndInit;
+                    videoEl.oncanplay = playAndInit;
+
+                    // Fallback force trigger
+                    setTimeout(() => {
+                        if (videoEl.paused || !processingLoopActive) {
+                            playAndInit();
+                        }
+                    }, 600);
                 });
                 call.on('close', () => {
                     document.getElementById('pip-container').classList.add('hidden');
@@ -540,11 +559,15 @@
            
             async function processFrame() {
                 if (!processingLoopActive) return;
-                if (videoElement.readyState >= 2 && !videoElement.paused) {
+                // Add pipeline synchronization lock to eliminate single-thread rendering freezes
+                if (videoElement.readyState >= 2 && !videoElement.paused && !isProcessingFrame) {
+                    isProcessingFrame = true;
                     try {
                         await poseDetector.send({ image: videoElement });
                     } catch (e) {
-                        // Suppressed logging to preserve terminal performance metrics
+                        // Suppressed to maintain execution speed
+                    } finally {
+                        isProcessingFrame = false;
                     }
                 }
                 requestAnimationFrame(processFrame);
@@ -680,7 +703,7 @@
             `;
         }
 
-        // ==================== ROBUST MODEL PARSING & MATCHING ====================
+        // ==================== MODEL PARSING & MATCHING ====================
         function handleModelFile(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -837,59 +860,6 @@
             });
         }
 
-        // ==================== CYBERPUNK EDGE-SOBEL SHADER ====================
-        function applyPseudoNormalMap(maskCanvas, imageCanvas, targetCanvas) {
-            const ctx = targetCanvas.getContext('2d');
-            const w = targetCanvas.width;
-            const h = targetCanvas.height;
-            
-            ctx.drawImage(imageCanvas, 0, 0, w, h);
-            const imgData = ctx.getImageData(0, 0, w, h);
-            const imgPix = imgData.data;
-            
-            const maskCtx = maskCanvas.getContext('2d');
-            const maskData = maskCtx.getImageData(0, 0, w, h);
-            const maskPix = maskData.data;
-            
-            const output = ctx.createImageData(w, h);
-            const outPix = output.data;
-            
-            for (let y = 1; y < h - 1; y++) {
-                for (let x = 1; x < w - 1; x++) {
-                    const idx = (y * w + x) * 4;
-                    const a = maskPix[idx + 3]; 
-                    
-                    if (a < 35) {
-                        // Background: Slate Navy
-                        outPix[idx] = 11;
-                        outPix[idx + 1] = 15;
-                        outPix[idx + 2] = 26;
-                        outPix[idx + 3] = 255;
-                        continue;
-                    }
-                    
-                    const a_l = maskPix[idx - 4 + 3];
-                    const a_r = maskPix[idx + 4 + 3];
-                    const a_u = maskPix[((y - 1) * w + x) * 4 + 3];
-                    const a_d = maskPix[((y + 1) * w + x) * 4 + 3];
-                    
-                    const dx = (a_r - a_l) / 255.0;
-                    const dy = (a_d - a_u) / 255.0;
-                    
-                    const nx = dx * 0.5 + 0.5;
-                    const ny = dy * 0.5 + 0.5;
-                    const nz = 1.0 - Math.min(1.0, Math.sqrt(dx*dx + dy*dy));
-                    
-                    // Cyan-Purple Cyberpunk mix
-                    outPix[idx] = Math.floor(nx * 128 + imgPix[idx] * 0.4);
-                    outPix[idx + 1] = Math.floor(ny * 220 + imgPix[idx + 1] * 0.1);
-                    outPix[idx + 2] = Math.floor(nz * 255 + imgPix[idx + 2] * 0.4);
-                    outPix[idx + 3] = 255;
-                }
-            }
-            ctx.putImageData(output, 0, 0);
-        }
-
         // ==================== STRUCTURAL ANATOMICAL ROTATION CLAMPING ====================
         function clampJointRotation(boneName, quat) {
             const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
@@ -1040,7 +1010,7 @@
 
         // ==================== POSE RECONSTRUCTION PIPELINE ====================
         function onPoseAnalysis(results) {
-            // Background subtraction visualizer filter pipeline
+            // GPU-Accelerated WebRTC background subtraction PiP visualizer
             const canvasEl = document.getElementById('pip-canvas');
             if (canvasEl && results.segmentationMask && results.image) {
                 const renderW = 208;
@@ -1049,14 +1019,17 @@
                     canvasEl.width = renderW;
                     canvasEl.height = renderH;
                 }
+                const canvasCtx = canvasEl.getContext('2d');
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, renderW, renderH);
                 
-                const offscreen = document.createElement('canvas');
-                offscreen.width = renderW;
-                offscreen.height = renderH;
-                const oCtx = offscreen.getContext('2d');
-                oCtx.drawImage(results.segmentationMask, 0, 0, renderW, renderH);
+                // 1. Draw segmentation mask overlay
+                canvasCtx.drawImage(results.segmentationMask, 0, 0, renderW, renderH);
                 
-                applyPseudoNormalMap(offscreen, results.image, canvasEl);
+                // 2. Crop to background-subtracted foreground via source-in blending
+                canvasCtx.globalCompositeOperation = 'source-in';
+                canvasCtx.drawImage(results.image, 0, 0, renderW, renderH);
+                canvasCtx.restore();
             }
 
             if (!results.poseWorldLandmarks) return;
@@ -1092,6 +1065,17 @@
             }
 
             latestJointCoords = jointCoords;
+
+            // Geometric validity check to filter initial WebRTC solid/blank frames
+            const leftHip = jointCoords.leftHip;
+            const leftKnee = jointCoords.leftKnee;
+            if (leftHip && leftKnee) {
+                const thighDistance = leftHip.distanceTo(leftKnee);
+                if (thighDistance < 0.1) {
+                    // Suppress update of collapsed limbs to prevent fold distortion
+                    return;
+                }
+            }
 
             // Tracking Jolt Suppressor: Detect and skip coordinate jumps > 0.4 units
             const currentHipsPos = jointCoords.spineBottom;
