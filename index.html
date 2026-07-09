@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Rig-Mirror 3D - Universal Mocap</title>
+    <title>Rig-Mirror 3D - v4 Ultimate</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -30,33 +30,21 @@
         video { transform: scaleX(-1); }
         #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
-        #pip-canvas { transform: scaleX(-1); }
+        #pip-canvas { transform: scaleX(-1); } /* Mirror reflection for intuitive user feedback */
         @media (max-width: 640px) {
-            #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
-            #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
+            #display-dashboard { max-width: 92vw; left: 4vw; top: 12px; }
+            #pip-container { width: 138px; height: 104px; bottom: 16px; right: 16px; }
         }
         .loader-spinner {
-            border: 2px solid rgba(0, 243, 255, 0.2);
-            border-top: 2px solid #00f3ff;
+            border: 3px solid rgba(0, 243, 255, 0.2);
+            border-top: 3px solid #00f3ff;
             border-radius: 50%;
-            width: 18px;
-            height: 18px;
+            width: 22px; height: 22px;
             animation: spin 0.8s linear infinite;
             display: inline-block;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Fix for frozen video - force hardware acceleration */
-        video, canvas { 
-            will-change: transform;
-            transform: translateZ(0);
-        }
-        #pip-container video {
-            display: block !important;
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important;
-        }
-        /* Ensure canvas container renders properly */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* Prevent canvas scaling distortions */
         #canvas-container canvas {
             display: block;
             width: 100% !important;
@@ -65,62 +53,58 @@
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
+
     <!-- Header -->
-    <header class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between z-10 shrink-0">
-        <div class="flex items-center gap-2">
-            <span class="text-xl font-bold tracking-wider text-teal-400">⚡ Rig-Mirror 3D</span>
-            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">v3 • Fixed</span>
+    <header class="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl font-bold tracking-wider text-teal-400">⚡ Rig-Mirror 3D</span>
+            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-3 py-1 rounded-full font-mono">v4 • Ultimate</span>
         </div>
-        <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
+        <div id="status-badge" class="bg-slate-800 px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2">
+            <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span> Offline
         </div>
     </header>
 
     <!-- Main Viewport -->
     <main class="relative flex-grow w-full overflow-hidden">
+
         <!-- 1. SETUP SCREEN -->
-        <div id="setup-view" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-40 overflow-y-auto">
-            <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
+        <div id="setup-view" class="absolute inset-0 bg-slate-950 flex items-center justify-center p-6 z-50">
+            <div class="max-w-md w-full bg-slate-900 border border-slate-700 p-10 rounded-3xl shadow-2xl text-center space-y-8">
                 <div>
-                    <h2 class="text-2xl font-bold mb-2 text-white">Choose Your Device Role</h2>
-                    <p class="text-sm text-slate-400">Transform your phone into an intelligent motion-capture camera and mirror onto any 3D model on your computer.</p>
+                    <h2 class="text-3xl font-bold mb-3">Choose Your Role</h2>
+                    <p class="text-sm text-slate-400">Turn your phone into an intelligent motion-capture camera and mirror onto custom rigged 3D models on your computer.</p>
                 </div>
-                <div class="space-y-4">
-                    <button onclick="startAsDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-xl font-semibold shadow-lg shadow-teal-900/30 transition-all duration-200">
-                        🖥️ Display Screen (PC/Laptop)
-                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models and handles motion analysis</span>
-                    </button>
-                    <div class="flex items-center justify-center gap-2 my-2 text-xs text-slate-500">
-                        <span class="h-px bg-slate-800 flex-grow"></span> OR <span class="h-px bg-slate-800 flex-grow"></span>
-                    </div>
-                    <button onclick="startAsCamera()" class="w-full p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-semibold transition-all duration-200">
-                        📱 Phone Camera Source
-                        <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency camera data</span>
-                    </button>
-                </div>
+                <button onclick="startAsDisplay()" class="w-full p-6 bg-teal-600 hover:bg-teal-500 rounded-2xl font-semibold text-xl shadow-xl shadow-teal-900/30 transition-all duration-200">
+                    🖥️ Display Screen (PC)
+                    <span class="block text-xs font-normal text-teal-100 mt-1">Handles 3D visualization and processing</span>
+                </button>
+                <div class="text-slate-500 font-mono text-sm">OR</div>
+                <button onclick="startAsCamera()" class="w-full p-6 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-2xl font-semibold text-xl transition-all duration-200">
+                    📱 Phone Camera Source
+                    <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency video and audio feeds</span>
+                </button>
             </div>
         </div>
 
         <!-- 2. PHONE STREAMER VIEW -->
-        <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 z-30">
-            <div class="max-w-sm w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
-                <h2 class="text-xl font-bold text-center">📱 Phone Camera Streamer</h2>
-               
-                <div id="phone-input-container" class="space-y-3">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from PC Display</label>
-                    <input id="target-peer-code" type="text" placeholder="ABCDE" maxlength="5" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
-                    <button onclick="connectToDisplay()" class="w-full p-3 bg-teal-600 hover:bg-teal-500 font-semibold rounded-lg transition duration-200">
+        <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex items-center justify-center p-6 z-40">
+            <div class="max-w-sm w-full bg-slate-900 border border-slate-700 p-8 rounded-3xl space-y-6">
+                <h2 class="text-2xl font-bold text-center">📱 Phone Streamer</h2>
+                <div id="phone-input-container" class="space-y-4">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-widest text-center">Enter Code from PC Display</label>
+                    <input id="target-peer-code" type="text" maxlength="5" placeholder="ABCDE" class="w-full p-5 text-4xl font-mono text-center tracking-widest bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:border-teal-500 uppercase">
+                    <button onclick="connectToDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-2xl font-semibold transition duration-200">
                         Establish Link & Stream
                     </button>
                 </div>
                 <div id="phone-stream-container" class="hidden space-y-4">
-                    <div class="relative aspect-[9/16] bg-black border border-slate-800 rounded-lg overflow-hidden max-h-[60vh]">
+                    <div class="relative aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-slate-700">
                         <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                        <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-slate-300">📹 Live</div>
+                        <div class="absolute bottom-3 left-3 bg-black/60 text-xs px-2.5 py-1 rounded text-slate-300 font-mono">📹 LIVE FEED</div>
                     </div>
-                    <p class="text-xs text-slate-400 text-center">📱 Hold your phone <span class="font-bold text-white">vertically</span> for best full-body capture. Ensure good lighting.</p>
-                    <button onclick="resetApp()" class="w-full p-3 bg-red-600 hover:bg-red-500 font-semibold rounded-lg transition duration-200">
-                        Disconnect Stream
+                    <button onclick="resetApp()" class="w-full p-4 bg-red-600 hover:bg-red-500 rounded-2xl font-semibold transition duration-200">
+                        Disconnect
                     </button>
                 </div>
             </div>
@@ -128,278 +112,132 @@
 
         <!-- 3. PC DISPLAY VIEW -->
         <div id="display-view" class="hidden absolute inset-0 w-full h-full">
-            <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
-            
+            <div id="canvas-container" class="absolute inset-0 bg-slate-950"></div>
+
             <!-- Floating Dashboard -->
-            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto max-h-[90vh] overflow-y-auto">
-                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard</h3>
+            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-700 p-6 rounded-3xl shadow-2xl max-w-sm z-30 max-h-[90vh] overflow-y-auto backdrop-blur pointer-events-auto space-y-6">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <h3 class="font-bold text-lg">Rig Dashboard</h3>
                     <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
                 </div>
-               
-                <div id="code-prompt" class="space-y-1 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider block">Link Code</span>
-                    <div class="flex items-center gap-3">
-                        <span id="display-peer-code" class="text-2xl font-mono font-bold text-teal-400">Generating...</span>
-                        <span class="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Enter on phone</span>
-                    </div>
-                </div>
-                
-                <!-- Model Uploader -->
-                <div class="space-y-2">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Load Custom 3D Model</label>
-                    <div class="flex flex-col gap-2">
-                        <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
-                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload .glb / .gltf / .fbx</span>
-                            <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
-                        </label>
-                        <div class="flex gap-2">
-                            <input id="model-url" type="text" placeholder="Or enter GLB/FBX URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
-                            <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
+
+                <div class="space-y-6">
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-500 block font-semibold">Link Code</span>
+                        <div class="flex items-center justify-between mt-1">
+                            <span id="display-peer-code" class="text-3xl font-mono font-bold text-teal-400">-----</span>
+                            <span class="text-[11px] text-slate-400 bg-slate-800 px-2.5 py-1 rounded-lg">Enter on phone</span>
                         </div>
                     </div>
-                </div>
 
-                <!-- Controls -->
-                <div class="border-t border-slate-800 pt-3 space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rig Controls</span>
-                        <button onclick="hardResetPose()" class="bg-red-950/40 border border-red-700/60 text-red-300 hover:bg-red-800/40 text-[10px] px-2.5 py-1 rounded font-semibold transition">Reset Pose</button>
+                    <!-- Model Loader -->
+                    <div class="space-y-2">
+                        <label class="block text-xs uppercase tracking-widest text-slate-400 font-semibold">Load 3D Model</label>
+                        <div class="flex flex-col gap-2">
+                            <label class="block border-2 border-dashed border-slate-750 hover:border-teal-500 bg-slate-950 rounded-2xl p-4 text-center cursor-pointer transition">
+                                <span class="text-xs text-slate-400">Drop .glb / .gltf / .fbx or click</span>
+                                <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
+                            </label>
+                            <div class="flex gap-2">
+                                <input id="model-url" type="text" placeholder="Enter model URL..." class="flex-grow p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono focus:outline-none focus:border-teal-500">
+                                <button onclick="loadFromURLInput()" class="px-4 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl border border-slate-700">Load</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="flex gap-3">
+                        <button onclick="hardResetPose()" class="flex-1 bg-red-950 hover:bg-red-900 border border-red-700/50 text-red-300 py-3 rounded-2xl text-xs font-semibold transition">Reset Pose</button>
+                        <button onclick="toggleCalibration()" id="calib-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 py-3 rounded-2xl text-xs font-semibold transition">Calibrate</button>
+                    </div>
+
+                    <!-- Calibration Sub-panel -->
+                    <div id="calibration-panel" class="hidden bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-4">
+                        <div id="calibration-prompt" class="text-xs text-slate-300 text-center leading-relaxed">Step 1: Stand straight in a neutral T-Pose.</div>
+                        <div class="flex justify-between gap-2">
+                            <button onclick="cancelCalibration()" class="w-1/2 p-2 bg-slate-900 hover:bg-slate-850 text-[10px] font-semibold rounded-lg border border-slate-800">Cancel</button>
+                            <button onclick="confirmCalibrationStep()" id="calib-next-btn" class="w-1/2 p-2 bg-teal-600 hover:bg-teal-500 text-[10px] font-semibold rounded-lg">Register Pose</button>
+                        </div>
+                    </div>
+
+                    <!-- Audio DSP -->
+                    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                        <div class="text-xs uppercase font-bold text-teal-400 tracking-wider">Live Audio FX Pipeline</div>
+                        
+                        <!-- Echo Delay Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Echo Delay</span>
+                                <span id="echo-time-val" class="font-mono text-teal-400">0.35s</span>
+                            </div>
+                            <input id="echo-time-slider" type="range" min="0.1" max="1.0" step="0.05" value="0.35" oninput="updateEchoTime(this.value); document.getElementById('echo-time-val').innerText=this.value+'s'" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                        
+                        <!-- Echo Feedback Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Echo Feedback</span>
+                                <span id="echo-feedback-val" class="font-mono text-teal-400">30%</span>
+                            </div>
+                            <input id="echo-feedback-slider" type="range" min="0.0" max="0.9" step="0.05" value="0.30" oninput="updateEchoFeedback(this.value); document.getElementById('echo-feedback-val').innerText=Math.round(this.value*100)+'%'" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                        
+                        <!-- Reverb Mix Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Reverb Wet/Dry Mix</span>
+                                <span id="reverb-mix-val" class="font-mono text-teal-400">45%</span>
+                            </div>
+                            <input id="reverb-mix-slider" type="range" min="0.0" max="1.0" step="0.05" value="0.45" oninput="updateReverbWet(this.value); document.getElementById('reverb-mix-val').innerText=Math.round(this.value*100)+'%'" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                        
+                        <!-- Reverb Decay Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Arena Decay Size</span>
+                                <span id="reverb-decay-val" class="font-mono text-teal-400">3.5s</span>
+                            </div>
+                            <input id="reverb-decay-slider" type="range" min="1.0" max="5.0" step="0.1" value="3.5" oninput="updateReverbDecay(this.value); document.getElementById('reverb-decay-val').innerText=this.value+'s'" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                    </div>
+
+                    <!-- Model Info panel -->
+                    <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
+                        <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin.</div>
+                        <div>Upload a rigged <span class="text-teal-400 font-mono">.glb/.fbx</span> model to apply custom tracking mappings.</div>
                     </div>
                 </div>
-                
-                <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
-                    <div><span class="font-semibold text-slate-300">Default Avatar:</span> Low-poly tracking mannequin.</div>
-                    <div>Upload a rigged <span class="text-teal-400 font-mono">.glb/.fbx</span> model to test customized rigs.</div>
-                </div>
             </div>
-            
-            <!-- Video PiP -->
-            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
-                <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Phone Feed</div>
+
+            <!-- Supreme Hologram PiP -->
+            <div id="pip-container" class="hidden absolute bottom-6 right-6 w-52 h-40 bg-black rounded-3xl overflow-hidden border border-teal-500/30 shadow-2xl z-40">
+                <video id="remote-video" autoplay playsinline muted class="hidden"></video>
+                <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
+                <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded font-mono">📷 HOLOGRAM</div>
             </div>
         </div>
     </main>
 
     <script>
         // ==================== CORE VARIABLES ====================
-        let peer = null;
-        let peerId = "";
-        let localStream = null;
-        let poseDetector = null;
-        let activeCall = null;
-        let processingLoopActive = false;
-        let lastProcessed = 0;
+        let peer = null, peerId = "", localStream = null, poseDetector = null, activeCall = null;
+        let scene = null, camera = null, renderer = null, controls = null, loadedModel = null, resolvedBones = {};
+        let processingLoopActive = false, animationFrameId = null;
         let modelLoadAttempts = 0;
-        let frameSkipCounter = 0;
-        
-        let scene, camera, renderer, controls;
-        let loadedModel = null;
-        let resolvedBones = {};
-        let animationFrameId = null;
 
-        // Jolt Suppression
+        // Interactive Calibration States
+        let calibrationState = 0; // 0 = Inactive, 1 = T-Pose, 2 = Left Arm, 3 = Right Arm, 4 = Left Leg, 5 = Right Leg
+        let customBoneLengths = {};
+        let latestJointCoords = null;
+
+        // Jolt Suppression Variables
         let lastHipsPos = new THREE.Vector3();
-        let joltCooldown = 0;
-        let transitionBlend = 1.0;
+        let joltCooldown = 0, transitionBlend = 1.0;
 
-        const setupView = document.getElementById('setup-view');
-        const phoneView = document.getElementById('phone-view');
-        const displayView = document.getElementById('display-view');
+        // Audio Context API Nodes
+        let audioCtx = null, audioSource = null, delayNode = null, delayGainNode = null, reverbNode = null, reverbGainNode = null, dryGainNode = null;
 
-        // ==================== UTILS ====================
-        function generateCode() {
-            return Math.random().toString(36).substring(2, 7).toUpperCase();
-        }
-
-        function setStatus(status, label) {
-            const badge = document.getElementById('status-badge');
-            if (status === 'connected') {
-                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block"></span> ${label}`;
-                badge.className = "bg-green-950/40 border border-green-800/40 px-3 py-1 rounded-full text-xs font-semibold text-green-400 flex items-center gap-2";
-            } else if (status === 'loading') {
-                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-yellow-500 rounded-full inline-block animate-bounce"></span> ${label}`;
-                badge.className = "bg-yellow-950/40 border border-yellow-800/40 px-3 py-1 rounded-full text-xs font-semibold text-yellow-400 flex items-center gap-2";
-            } else {
-                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> ${label}`;
-                badge.className = "bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2";
-            }
-        }
-
-        function disposeThreeJS() {
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            if (renderer) {
-                renderer.dispose();
-                if (renderer.domElement && renderer.domElement.parentNode) {
-                    renderer.domElement.parentNode.removeChild(renderer.domElement);
-                }
-            }
-            if (loadedModel) {
-                loadedModel.traverse((child) => {
-                    if (child.geometry) child.geometry.dispose();
-                    if (child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => m.dispose());
-                        } else {
-                            child.material.dispose();
-                        }
-                    }
-                });
-            }
-            scene = camera = renderer = controls = loadedModel = null;
-            resolvedBones = {};
-        }
-
-        // ==================== PHONE MODE ====================
-        function startAsCamera() {
-            setupView.classList.add('hidden');
-            phoneView.classList.remove('hidden');
-            setStatus('offline', 'Source Mode');
-            peer = new Peer();
-            peer.on('error', (err) => {
-                alert("Connection failed: " + err.message);
-                resetApp();
-            });
-        }
-
-        async function connectToDisplay() {
-            const codeInput = document.getElementById('target-peer-code').value.trim().toUpperCase();
-            if (!codeInput || codeInput.length !== 5) {
-                alert("Please enter the 5-digit code shown on the display PC.");
-                return;
-            }
-            setStatus('loading', 'Accessing Stream...');
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
-                    audio: false
-                });
-                document.getElementById('local-video').srcObject = localStream;
-                document.getElementById('phone-input-container').classList.add('hidden');
-                document.getElementById('phone-stream-container').classList.remove('hidden');
-               
-                setStatus('loading', 'Connecting...');
-                const targetPeerId = "WM-MOCAP-" + codeInput;
-                const call = peer.call(targetPeerId, localStream);
-                activeCall = call;
-                call.on('close', () => {
-                    alert("Display connection lost.");
-                    resetApp();
-                });
-                setStatus('connected', 'Live Streaming');
-            } catch (err) {
-                console.error(err);
-                alert("Camera access failed. Ensure connection is served via HTTPS or localhost.");
-                setStatus('offline', 'Source Blocked');
-            }
-        }
-
-        // ==================== DISPLAY MODE ====================
-        function startAsDisplay() {
-            setupView.classList.add('hidden');
-            displayView.classList.remove('hidden');
-            setStatus('loading', 'Initializing...');
-            
-            initThreeJS();
-            initMediaPipe();
-            
-            const pinCode = generateCode();
-            peerId = "WM-MOCAP-" + pinCode;
-            document.getElementById('display-peer-code').innerText = pinCode;
-            
-            peer = new Peer(peerId);
-            peer.on('open', () => {
-                setStatus('offline', 'Awaiting Source...');
-            });
-            peer.on('call', (call) => {
-                setStatus('loading', 'Opening Stream...');
-                call.answer();
-                activeCall = call;
-                call.on('stream', (remoteStream) => {
-                    const videoEl = document.getElementById('remote-video');
-                    document.getElementById('pip-container').classList.remove('hidden');
-                    
-                    // CRITICAL FIX: Properly handle the video stream
-                    videoEl.srcObject = remoteStream;
-                    videoEl.onloadedmetadata = () => {
-                        videoEl.play().catch(e => console.warn("Video play warning:", e));
-                        // Small delay to ensure video is ready
-                        setTimeout(() => {
-                            startFrameProcessing();
-                            setStatus('connected', 'Mocap Active');
-                        }, 100);
-                    };
-                    // Fallback if onloadedmetadata doesn't fire
-                    setTimeout(() => {
-                        if (videoEl.readyState >= 2) {
-                            videoEl.play().catch(e => console.warn("Video play fallback:", e));
-                            startFrameProcessing();
-                            setStatus('connected', 'Mocap Active');
-                        }
-                    }, 500);
-                });
-                call.on('close', () => {
-                    document.getElementById('pip-container').classList.add('hidden');
-                    processingLoopActive = false;
-                    setStatus('offline', 'Disconnected');
-                });
-            });
-        }
-
-        function initMediaPipe() {
-            poseDetector = new Pose({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-            });
-            poseDetector.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-            poseDetector.onResults(onPoseAnalysis);
-        }
-
-        function startFrameProcessing() {
-            if (processingLoopActive) return;
-            processingLoopActive = true;
-            const videoElement = document.getElementById('remote-video');
-            
-            // Ensure video is actually playing
-            if (videoElement.paused) {
-                videoElement.play().catch(e => console.warn("Video play in processing:", e));
-            }
-            
-            async function processFrame() {
-                if (!processingLoopActive) return;
-                try {
-                    if (videoElement.readyState >= 2 && !videoElement.paused && videoElement.videoWidth > 0) {
-                        await poseDetector.send({ image: videoElement });
-                    } else {
-                        // If video not ready, skip this frame
-                        frameSkipCounter++;
-                        if (frameSkipCounter > 10) {
-                            // Try to restart video if it's stuck
-                            if (videoElement.paused) {
-                                videoElement.play().catch(e => {});
-                            }
-                            frameSkipCounter = 0;
-                        }
-                    }
-                } catch (e) {
-                    // Silently handle processing errors
-                }
-                if (processingLoopActive) {
-                    requestAnimationFrame(processFrame);
-                }
-            }
-            processFrame();
-        }
-
-        // ==================== THREE.JS SETUP & MAPPING ====================
+        // Bone Aliases dictionary for multi-pass standard mapping
         const nameAliases = {
             Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root', 'mixamorig:Hips', 'hip', 'pelvis'],
             Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2', 'mixamorig:Spine', 'spine'],
@@ -438,6 +276,283 @@
             leftAnkle: 27, rightAnkle: 28
         };
 
+        // ==================== UTILS ====================
+        function generateCode() {
+            return Math.random().toString(36).substring(2, 7).toUpperCase();
+        }
+
+        function setStatus(status, label) {
+            const badge = document.getElementById('status-badge');
+            if (status === 'connected') {
+                badge.innerHTML = `<span class="w-3 h-3 bg-green-500 rounded-full inline-block"></span> ${label}`;
+                badge.className = "bg-green-950/45 border border-green-800/40 px-4 py-1.5 rounded-full text-xs font-semibold text-green-400 flex items-center gap-2";
+            } else if (status === 'loading') {
+                badge.innerHTML = `<span class="loader-spinner"></span> ${label}`;
+                badge.className = "bg-yellow-950/45 border border-yellow-800/40 px-4 py-1.5 rounded-full text-xs font-semibold text-yellow-400 flex items-center gap-2";
+            } else {
+                badge.innerHTML = `<span class="w-3 h-3 bg-red-500 rounded-full inline-block animate-pulse"></span> ${label}`;
+                badge.className = "bg-slate-800 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2";
+            }
+        }
+
+        function disposeThreeJS() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (renderer) {
+                renderer.dispose();
+                if (renderer.domElement && renderer.domElement.parentNode) {
+                    renderer.domElement.parentNode.removeChild(renderer.domElement);
+                }
+            }
+            if (loadedModel) {
+                loadedModel.traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
+            scene = camera = renderer = controls = loadedModel = null;
+            resolvedBones = {};
+        }
+
+        // ==================== PHONE CAMERA SOURCE MODE ====================
+        function startAsCamera() {
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('phone-view').classList.remove('hidden');
+            setStatus('offline', 'Source Mode');
+            peer = new Peer();
+            peer.on('error', (err) => {
+                alert("Connection failed: " + err.message);
+                resetApp();
+            });
+        }
+
+        async function connectToDisplay() {
+            const codeInput = document.getElementById('target-peer-code').value.trim().toUpperCase();
+            if (!codeInput || codeInput.length !== 5) {
+                alert("Please enter the 5-digit code shown on the display PC.");
+                return;
+            }
+            setStatus('loading', 'Accessing Stream...');
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                document.getElementById('local-video').srcObject = localStream;
+                document.getElementById('phone-input-container').classList.add('hidden');
+                document.getElementById('phone-stream-container').classList.remove('hidden');
+               
+                setStatus('loading', 'Connecting...');
+                const targetPeerId = "WM-MOCAP-" + codeInput;
+                const call = peer.call(targetPeerId, localStream);
+                activeCall = call;
+                call.on('close', () => {
+                    alert("Display connection lost.");
+                    resetApp();
+                });
+                setStatus('connected', 'Live Streaming');
+            } catch (err) {
+                console.error(err);
+                alert("Camera access failed. Ensure connection is served via HTTPS or localhost.");
+                setStatus('offline', 'Source Blocked');
+            }
+        }
+
+        // ==================== CONVERSION CONVOLUTION IMPULSE BUFFER ====================
+        function createArenaReverbBuffer(audioCtx, duration = 3.5, decay = 2.8) {
+            const sampleRate = audioCtx.sampleRate;
+            const len = sampleRate * duration;
+            const buffer = audioCtx.createBuffer(2, len, sampleRate);
+            
+            for (let channel = 0; channel < 2; channel++) {
+                const data = buffer.getChannelData(channel);
+                for (let i = 0; i < len; i++) {
+                    const percent = i / len;
+                    const envelope = Math.pow(1 - percent, decay);
+                    data[i] = (Math.random() * 2 - 1) * envelope;
+                }
+            }
+            return buffer;
+        }
+
+        function setupAudioDSP(stream) {
+            if (stream.getAudioTracks().length === 0) return;
+            
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                audioSource = audioCtx.createMediaStreamSource(stream);
+                
+                // Voice bandpass filter (attenuates extreme frequencies)
+                const hpFilter = audioCtx.createBiquadFilter();
+                hpFilter.type = "highpass";
+                hpFilter.frequency.value = 85; 
+                
+                const lpFilter = audioCtx.createBiquadFilter();
+                lpFilter.type = "lowpass";
+                lpFilter.frequency.value = 3500; 
+                
+                // Dynamics expander gate for clean noise suppression
+                const gate = audioCtx.createDynamicsCompressor();
+                gate.threshold.value = -35; 
+                gate.knee.value = 10;
+                gate.ratio.value = 12;
+                gate.attack.value = 0.01;
+                gate.release.value = 0.25;
+
+                // Delay nodes
+                delayNode = audioCtx.createDelay(1.0);
+                delayNode.delayTime.value = parseFloat(document.getElementById('echo-time-slider').value); 
+                
+                delayGainNode = audioCtx.createGain();
+                delayGainNode.gain.value = parseFloat(document.getElementById('echo-feedback-slider').value); 
+                
+                delayNode.connect(delayGainNode);
+                delayGainNode.connect(delayNode);
+                
+                // Convolver reverb
+                reverbNode = audioCtx.createConvolver();
+                reverbNode.buffer = createArenaReverbBuffer(audioCtx, parseFloat(document.getElementById('reverb-decay-slider').value), 3.0);
+                
+                reverbGainNode = audioCtx.createGain();
+                const wetMix = parseFloat(document.getElementById('reverb-mix-slider').value);
+                reverbGainNode.gain.value = wetMix; 
+
+                dryGainNode = audioCtx.createGain();
+                dryGainNode.gain.value = 1.0 - wetMix * 0.4; 
+
+                // routing connections
+                audioSource.connect(hpFilter);
+                hpFilter.connect(lpFilter);
+                lpFilter.connect(gate);
+                
+                gate.connect(dryGainNode);
+                gate.connect(delayNode);
+                gate.connect(reverbNode);
+                
+                reverbNode.connect(reverbGainNode);
+                
+                dryGainNode.connect(audioCtx.destination);
+                delayGainNode.connect(audioCtx.destination);
+                reverbGainNode.connect(audioCtx.destination);
+            } catch (err) {
+                console.warn("Audio DSP init failed:", err);
+            }
+        }
+
+        function updateEchoTime(val) {
+            if (delayNode && audioCtx) {
+                delayNode.delayTime.linearRampToValueAtTime(parseFloat(val), audioCtx.currentTime + 0.1);
+            }
+        }
+        function updateEchoFeedback(val) {
+            if (delayGainNode && audioCtx) {
+                delayGainNode.gain.linearRampToValueAtTime(parseFloat(val), audioCtx.currentTime + 0.1);
+            }
+        }
+        function updateReverbWet(val) {
+            const wet = parseFloat(val);
+            if (reverbGainNode && audioCtx) {
+                reverbGainNode.gain.linearRampToValueAtTime(wet, audioCtx.currentTime + 0.1);
+            }
+            if (dryGainNode && audioCtx) {
+                dryGainNode.gain.linearRampToValueAtTime(1.0 - wet * 0.4, audioCtx.currentTime + 0.1);
+            }
+        }
+        function updateReverbDecay(val) {
+            if (reverbNode && audioCtx) {
+                reverbNode.buffer = createArenaReverbBuffer(audioCtx, parseFloat(val), 3.0);
+            }
+        }
+
+        // ==================== DISPLAY MODE ====================
+        function startAsDisplay() {
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('display-view').classList.remove('hidden');
+            setStatus('loading', 'Initializing...');
+            
+            initThreeJS();
+            initMediaPipe();
+            
+            const pinCode = generateCode();
+            peerId = "WM-MOCAP-" + pinCode;
+            document.getElementById('display-peer-code').innerText = pinCode;
+            
+            peer = new Peer(peerId);
+            peer.on('open', () => {
+                setStatus('offline', 'Awaiting Source...');
+            });
+            peer.on('call', (call) => {
+                setStatus('loading', 'Opening Stream...');
+                call.answer();
+                activeCall = call;
+                call.on('stream', (remoteStream) => {
+                    const videoEl = document.getElementById('remote-video');
+                    document.getElementById('pip-container').classList.remove('hidden');
+                    videoEl.srcObject = remoteStream;
+                    videoEl.onloadedmetadata = () => {
+                        videoEl.play().catch(e => console.warn("Video play exception caught:", e));
+                        
+                        setupAudioDSP(remoteStream);
+                        startFrameProcessing();
+                        setStatus('connected', 'Mocap & DSP Active');
+                    };
+                });
+                call.on('close', () => {
+                    document.getElementById('pip-container').classList.add('hidden');
+                    setStatus('offline', 'Disconnected');
+                });
+            });
+        }
+
+        function initMediaPipe() {
+            poseDetector = new Pose({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+            });
+            poseDetector.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            poseDetector.onResults(onPoseAnalysis);
+        }
+
+        function startFrameProcessing() {
+            if (processingLoopActive) return;
+            processingLoopActive = true;
+            const videoElement = document.getElementById('remote-video');
+           
+            async function processFrame() {
+                if (!processingLoopActive) return;
+                if (videoElement.readyState >= 2 && !videoElement.paused) {
+                    try {
+                        await poseDetector.send({ image: videoElement });
+                    } catch (e) {
+                        // Suppressed logging to preserve terminal performance metrics
+                    }
+                }
+                requestAnimationFrame(processFrame);
+            }
+            processFrame();
+        }
+
+        // ==================== THREE.JS SETUP & FALLBACK MANNEQUIN ====================
         function initThreeJS() {
             const container = document.getElementById('canvas-container');
             disposeThreeJS();
@@ -561,11 +676,11 @@
             
             document.getElementById('model-info').innerHTML = `
                 <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin</div>
-                <div class="text-xs text-slate-500">Auto-generated skeleton. Ready to trace motion.</div>
+                <div class="text-xs text-slate-500 font-mono">Auto-generated skeleton hierarchy.</div>
             `;
         }
 
-        // ==================== MODEL LOADING ====================
+        // ==================== ROBUST MODEL PARSING & MATCHING ====================
         function handleModelFile(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -663,8 +778,8 @@
                 const boneCountStr = Object.keys(resolvedBones).length;
                 document.getElementById('model-info').innerHTML = `
                     <div class="text-green-400 font-semibold">✓ Model Loaded Successfully</div>
-                    <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400">File:</span> ${nameString}</div>
-                    <div class="text-[10px] text-slate-400">Matched <span class="font-semibold text-teal-400">${boneCountStr}/15</span> mapped bones. (Total bones found: ${boneCount})</div>
+                    <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400 font-mono">File:</span> ${nameString}</div>
+                    <div class="text-[10px] text-slate-400 font-mono">Matched ${boneCountStr}/15 bones. (Total bones: ${boneCount})</div>
                 `;
                 setStatus('connected', 'Skeletal Map Ready');
 
@@ -674,16 +789,16 @@
             };
 
             const errorCallback = (err) => {
-                console.error("Loader error:", err);
+                console.error("Loader failed:", err);
                 if (!isFBX && modelLoadAttempts < 3) {
                     const fbxLoader = new THREE.FBXLoader();
                     fbxLoader.load(url, loadCallback, undefined, (fbxErr) => {
-                        console.error("Backup FBX loader failed:", fbxErr);
-                        alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
+                        console.error("Fallback FBX load failed:", fbxErr);
+                        alert("Could not load model structure. Ensure it is a valid, rigged glb/gltf/fbx skeleton.");
                         loadDefaultMannequin();
                     });
                 } else {
-                    alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
+                    alert("Could not load model structure. Ensure it is a valid, rigged glb/gltf/fbx skeleton.");
                     loadDefaultMannequin();
                 }
                 if (url.startsWith('blob:')) {
@@ -722,6 +837,60 @@
             });
         }
 
+        // ==================== CYBERPUNK EDGE-SOBEL SHADER ====================
+        function applyPseudoNormalMap(maskCanvas, imageCanvas, targetCanvas) {
+            const ctx = targetCanvas.getContext('2d');
+            const w = targetCanvas.width;
+            const h = targetCanvas.height;
+            
+            ctx.drawImage(imageCanvas, 0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const imgPix = imgData.data;
+            
+            const maskCtx = maskCanvas.getContext('2d');
+            const maskData = maskCtx.getImageData(0, 0, w, h);
+            const maskPix = maskData.data;
+            
+            const output = ctx.createImageData(w, h);
+            const outPix = output.data;
+            
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    const idx = (y * w + x) * 4;
+                    const a = maskPix[idx + 3]; 
+                    
+                    if (a < 35) {
+                        // Background: Slate Navy
+                        outPix[idx] = 11;
+                        outPix[idx + 1] = 15;
+                        outPix[idx + 2] = 26;
+                        outPix[idx + 3] = 255;
+                        continue;
+                    }
+                    
+                    const a_l = maskPix[idx - 4 + 3];
+                    const a_r = maskPix[idx + 4 + 3];
+                    const a_u = maskPix[((y - 1) * w + x) * 4 + 3];
+                    const a_d = maskPix[((y + 1) * w + x) * 4 + 3];
+                    
+                    const dx = (a_r - a_l) / 255.0;
+                    const dy = (a_d - a_u) / 255.0;
+                    
+                    const nx = dx * 0.5 + 0.5;
+                    const ny = dy * 0.5 + 0.5;
+                    const nz = 1.0 - Math.min(1.0, Math.sqrt(dx*dx + dy*dy));
+                    
+                    // Cyan-Purple Cyberpunk mix
+                    outPix[idx] = Math.floor(nx * 128 + imgPix[idx] * 0.4);
+                    outPix[idx + 1] = Math.floor(ny * 220 + imgPix[idx + 1] * 0.1);
+                    outPix[idx + 2] = Math.floor(nz * 255 + imgPix[idx + 2] * 0.4);
+                    outPix[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(output, 0, 0);
+        }
+
+        // ==================== STRUCTURAL ANATOMICAL ROTATION CLAMPING ====================
         function clampJointRotation(boneName, quat) {
             const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
             
@@ -749,9 +918,14 @@
             quat.setFromEuler(euler);
         }
 
+        // ==================== RECOVERY TRIGGERS ====================
         function triggerJoltReset() {
             transitionBlend = 0.0;
             joltCooldown = 45;
+            const info = document.getElementById('model-info');
+            if (info) {
+                info.innerHTML = `<div class="text-red-400 font-bold animate-pulse">⚡ Recovering tracking stability...</div>` + info.innerHTML;
+            }
         }
 
         function hardResetPose() {
@@ -768,12 +942,123 @@
             }
             const info = document.getElementById('model-info');
             if (info) {
-                info.innerHTML = `<div class="text-teal-400 font-semibold">✓ Pose Forced to Neutral (T-Pose)</div>` + info.innerHTML;
+                info.innerHTML = `<div class="text-teal-400 font-semibold">✓ Neutral pose alignment restored.</div>` + info.innerHTML;
             }
         }
 
-        // ==================== POSE PROCESSING ====================
+        // ==================== CALIBRATION STRATEGY ====================
+        function toggleCalibration() {
+            const panel = document.getElementById('calibration-panel');
+            const btn = document.getElementById('calib-btn');
+            if (calibrationState === 0) {
+                calibrationState = 1;
+                panel.classList.remove('hidden');
+                btn.innerText = "Calibrating";
+                updateCalibrationUI();
+            } else {
+                cancelCalibration();
+            }
+        }
+
+        function cancelCalibration() {
+            calibrationState = 0;
+            document.getElementById('calibration-panel').classList.add('hidden');
+            document.getElementById('calib-btn').innerText = "Calibrate";
+            highlightBone(null); 
+        }
+
+        function highlightBone(boneKey) {
+            if (loadedModel) {
+                loadedModel.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        if (child.userData.originalColor) {
+                            child.material.color.copy(child.userData.originalColor);
+                        }
+                    }
+                });
+            }
+            
+            const bone = resolvedBones[boneKey];
+            if (bone) {
+                bone.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        if (!child.userData.originalColor) {
+                            child.userData.originalColor = child.material.color.clone();
+                        }
+                        child.material.color.setHex(0xfacc15); // Calibration Highlight Amber
+                    }
+                });
+            }
+        }
+
+        function updateCalibrationUI() {
+            const prompt = document.getElementById('calibration-prompt');
+            if (calibrationState === 1) {
+                prompt.innerHTML = `🚶 Step 1: Stand straight in a <span class="text-teal-400 font-bold">neutral T-Pose</span>.`;
+                highlightBone(null);
+            } else if (calibrationState === 2) {
+                prompt.innerHTML = `💪 Step 2: Extend your <span class="text-yellow-400 font-bold">Left Arm</span> out straight.`;
+                highlightBone('LeftArm');
+            } else if (calibrationState === 3) {
+                prompt.innerHTML = `💪 Step 3: Extend your <span class="text-yellow-400 font-bold">Right Arm</span> out straight.`;
+                highlightBone('RightArm');
+            } else if (calibrationState === 4) {
+                prompt.innerHTML = `🦵 Step 4: Lift your <span class="text-yellow-400 font-bold">Left Leg</span> forward.`;
+                highlightBone('LeftUpLeg');
+            } else if (calibrationState === 5) {
+                prompt.innerHTML = `🦵 Step 5: Lift your <span class="text-yellow-400 font-bold">Right Leg</span> forward.`;
+                highlightBone('RightUpLeg');
+            } else {
+                prompt.innerHTML = `<span class="text-green-400 font-semibold">✓ Calibration profile applied!</span>`;
+                setTimeout(() => {
+                    cancelCalibration();
+                }, 2000);
+            }
+        }
+
+        function confirmCalibrationStep() {
+            if (calibrationState > 5) return;
+            
+            if (latestJointCoords) {
+                if (calibrationState === 1 && latestJointCoords.leftShoulder && latestJointCoords.rightShoulder) {
+                    customBoneLengths.shoulderWidth = latestJointCoords.leftShoulder.distanceTo(latestJointCoords.rightShoulder);
+                    customBoneLengths.spineLength = latestJointCoords.spineBottom.distanceTo(latestJointCoords.spineTop);
+                } else if (calibrationState === 2 && latestJointCoords.leftShoulder && latestJointCoords.leftWrist) {
+                    customBoneLengths.leftArmLength = latestJointCoords.leftShoulder.distanceTo(latestJointCoords.leftWrist);
+                } else if (calibrationState === 3 && latestJointCoords.rightShoulder && latestJointCoords.rightWrist) {
+                    customBoneLengths.rightArmLength = latestJointCoords.rightShoulder.distanceTo(latestJointCoords.rightWrist);
+                } else if (calibrationState === 4 && latestJointCoords.leftHip && latestJointCoords.leftAnkle) {
+                    customBoneLengths.leftLegLength = latestJointCoords.leftHip.distanceTo(latestJointCoords.leftAnkle);
+                } else if (calibrationState === 5 && latestJointCoords.rightHip && latestJointCoords.rightAnkle) {
+                    customBoneLengths.rightLegLength = latestJointCoords.rightHip.distanceTo(latestJointCoords.rightAnkle);
+                }
+            }
+            
+            calibrationState++;
+            updateCalibrationUI();
+        }
+
+        // ==================== POSE RECONSTRUCTION PIPELINE ====================
         function onPoseAnalysis(results) {
+            // Background subtraction visualizer filter pipeline
+            const canvasEl = document.getElementById('pip-canvas');
+            if (canvasEl && results.segmentationMask && results.image) {
+                const renderW = 208;
+                const renderH = 160;
+                if (canvasEl.width !== renderW || canvasEl.height !== renderH) {
+                    canvasEl.width = renderW;
+                    canvasEl.height = renderH;
+                }
+                
+                const offscreen = document.createElement('canvas');
+                offscreen.width = renderW;
+                offscreen.height = renderH;
+                const oCtx = offscreen.getContext('2d');
+                oCtx.drawImage(results.segmentationMask, 0, 0, renderW, renderH);
+                
+                applyPseudoNormalMap(offscreen, results.image, canvasEl);
+            }
+
             if (!results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
@@ -783,13 +1068,14 @@
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
-                        lm.x,
-                        -lm.y + 0.95,
-                        -lm.z
+                        lm.x,         
+                        -lm.y + 0.95, 
+                        -lm.z         
                     );
                 }
             }
             
+            // Reconstruct torso components
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
                 jointCoords.leftUpperArm = jointCoords.leftShoulder;
@@ -805,7 +1091,9 @@
                 jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
             }
 
-            // Jolt detection
+            latestJointCoords = jointCoords;
+
+            // Tracking Jolt Suppressor: Detect and skip coordinate jumps > 0.4 units
             const currentHipsPos = jointCoords.spineBottom;
             if (currentHipsPos && lastHipsPos.lengthSq() > 0) {
                 const stepDisplacement = currentHipsPos.distanceTo(lastHipsPos);
@@ -816,7 +1104,7 @@
             if (currentHipsPos) lastHipsPos.copy(currentHipsPos);
             if (joltCooldown > 0) joltCooldown--;
             
-            // Torso twist
+            // Orthogonal Twist Basis mapping for Spine tracking
             if (jointCoords.leftShoulder && jointCoords.rightShoulder && jointCoords.spineTop && jointCoords.spineBottom) {
                 const u = new THREE.Vector3().subVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).normalize();
                 const v = new THREE.Vector3().subVectors(jointCoords.spineTop, jointCoords.spineBottom).normalize();
@@ -832,7 +1120,7 @@
                 }
             }
             
-            // Limb calculations
+            // Limb Orientation Mapping
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
@@ -867,7 +1155,7 @@
                 }
             });
 
-            // Finger articulation
+            // Procedural Finger curl mappings
             if (resolvedBones.LeftHand && jointCoords.leftWrist && worldLms[17] && worldLms[19]) {
                 const lWrist = new THREE.Vector3(-worldLms[15].x, -worldLms[15].y, -worldLms[15].z);
                 const lPinky = new THREE.Vector3(-worldLms[17].x, -worldLms[17].y, -worldLms[17].z);
@@ -910,7 +1198,7 @@
                 });
             }
             
-            // Root translation
+            // Root translation mappings with scale normalizations
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 const targetX = jointCoords.spineBottom.x / scaleY;
@@ -936,7 +1224,7 @@
             }
         }
 
-        // ==================== RESET ====================
+        // ==================== CLEAN DESTRUCTION ====================
         function resetApp() {
             processingLoopActive = false;
             if (localStream) {
@@ -951,13 +1239,17 @@
                 peer.destroy();
                 peer = null;
             }
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
             
             disposeThreeJS();
             window.removeEventListener('resize', onWindowResize);
 
-            setupView.classList.remove('hidden');
-            phoneView.classList.add('hidden');
-            displayView.classList.add('hidden');
+            document.getElementById('setup-view').classList.remove('hidden');
+            document.getElementById('phone-view').classList.add('hidden');
+            document.getElementById('display-view').classList.add('hidden');
             document.getElementById('pip-container').classList.add('hidden');
             document.getElementById('phone-input-container').classList.remove('hidden');
             document.getElementById('phone-stream-container').classList.add('hidden');
@@ -978,6 +1270,23 @@
         window.handleModelFile = handleModelFile;
         window.loadFromURLInput = loadFromURLInput;
         window.hardResetPose = hardResetPose;
+        window.toggleCalibration = toggleCalibration;
+        window.cancelCalibration = cancelCalibration;
+        window.confirmCalibrationStep = confirmCalibrationStep;
+        
+        window.updateEchoTime = updateEchoTime;
+        window.updateEchoFeedback = updateEchoFeedback;
+        window.updateReverbWet = updateReverbWet;
+        window.updateReverbDecay = updateReverbDecay;
+
+        // Auto unlock AudioContext on standard interaction
+        const unlockAudioContext = () => {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        };
+        document.addEventListener('click', unlockAudioContext);
+        document.addEventListener('touchstart', unlockAudioContext);
     </script>
 </body>
 </html>
