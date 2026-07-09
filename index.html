@@ -3,82 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Motion Capture & Mirror SPA</title>
-    <!-- Tailwind CSS for modern responsive layout -->
+    <title>Universal 3D Motion Capture & Rigging Platform</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Three.js Library -->
+    <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Three.js OrbitControls to inspect the model in 3D -->
+    <!-- OrbitControls -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- PeerJS for WebRTC connections -->
+    <!-- GLTFLoader to read custom .glb / .gltf files -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <!-- MediaPipe Pose Landmarker dependencies -->
+    <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
 
-    <!-- Header bar -->
+    <!-- Header -->
     <header class="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-10 shrink-0">
-        <h1 class="text-xl font-bold tracking-wider text-teal-400">⚡ Web-Mocap 3D</h1>
+        <div class="flex items-center gap-3">
+            <span class="text-xl font-bold tracking-wider text-teal-400">⚡ Rig-Mirror 3D</span>
+            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono">Mixamo & GLTF Compatible</span>
+        </div>
         <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
             <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
         </div>
     </header>
 
-    <!-- App Viewport Container -->
+    <!-- Main Viewport -->
     <main class="relative flex-grow w-full">
 
-        <!-- 1. ROLE SELECTION SCREEN -->
-        <div id="setup-view" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-40 transition-opacity duration-300">
+        <!-- 1. SETUP SCREEN -->
+        <div id="setup-view" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-40 overflow-y-auto">
             <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
                 <div>
-                    <h2 class="text-2xl font-bold mb-2">Choose Your Setup</h2>
-                    <p class="text-sm text-slate-400">Run this webpage on both your computer and your phone to track and mirror motion live.</p>
+                    <h2 class="text-2xl font-bold mb-2 text-white">Choose Your Device Role</h2>
+                    <p class="text-sm text-slate-400">Transform your phone into an intelligent motion-capture camera and mirror onto any 3D model on your computer.</p>
                 </div>
 
                 <div class="space-y-4">
-                    <!-- Button to become the Receiver (PC display) -->
                     <button onclick="startAsDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-xl font-semibold shadow-lg shadow-teal-900/30 transition-all duration-200">
                         🖥️ Display Screen (PC/Laptop)
-                        <span class="block text-xs font-normal text-teal-100 mt-1">Generates a code & renders the 3D model</span>
+                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models and handles motion analysis</span>
                     </button>
 
                     <div class="flex items-center justify-center gap-2 my-2 text-xs text-slate-500">
                         <span class="h-px bg-slate-800 flex-grow"></span> OR <span class="h-px bg-slate-800 flex-grow"></span>
                     </div>
 
-                    <!-- Button to become the Sender (Phone Camera) -->
                     <button onclick="startAsCamera()" class="w-full p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-semibold transition-all duration-200">
                         📱 Phone Camera Source
-                        <span class="block text-xs font-normal text-slate-400 mt-1">Sends your camera stream to the PC</span>
+                        <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency camera data to PC</span>
                     </button>
-                </div>
-                <div class="text-[11px] text-slate-500 border-t border-slate-800 pt-4">
-                    ⚠️ Note: Both devices must be connected to the internet. Standard WebRTC requirements (HTTPS or Localhost) apply.
                 </div>
             </div>
         </div>
 
-        <!-- 2. PHONE STREAMER SCREEN -->
+        <!-- 2. PHONE STREAMER VIEW -->
         <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 z-30">
             <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
                 <h2 class="text-xl font-bold text-center">📱 Phone Camera Streamer</h2>
                 
-                <!-- Code inputs -->
                 <div id="phone-input-container" class="space-y-3">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from Laptop Screen</label>
-                    <input id="target-peer-code" type="text" placeholder="e.g. ABCDE" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from PC Display</label>
+                    <input id="target-peer-code" type="text" placeholder="ABCDE" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
                     <button onclick="connectToDisplay()" class="w-full p-3 bg-teal-600 hover:bg-teal-500 font-semibold rounded-lg transition duration-200">
-                        Connect & Stream Motion
+                        Establish Link & Stream
                     </button>
                 </div>
 
-                <!-- Live local camera preview once connected -->
                 <div id="phone-stream-container" class="hidden space-y-4">
                     <div class="relative aspect-video bg-black border border-slate-800 rounded-lg overflow-hidden">
                         <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
                     </div>
-                    <p class="text-xs text-slate-400 text-center">💡 Tip: Place your phone horizontally (landscape mode) at chest height, making sure your full body fits in the camera feed.</p>
+                    <p class="text-xs text-slate-400 text-center">💡 Prop your phone up horizontally (landscape) and ensure your full body is visible.</p>
                     <button onclick="resetApp()" class="w-full p-3 bg-red-600 hover:bg-red-500 font-semibold rounded-lg transition duration-200">
                         Disconnect Stream
                     </button>
@@ -86,42 +84,60 @@
             </div>
         </div>
 
-        <!-- 3. PC DISPLAY SCREEN (3D Viewport) -->
+        <!-- 3. PC DISPLAY VIEW -->
         <div id="display-view" class="hidden absolute inset-0 w-full h-full">
-            <!-- Three.js Canvas Container -->
+            <!-- Canvas Container -->
             <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
 
-            <!-- Floating connection dashboard -->
-            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/90 border border-slate-800 p-4 rounded-xl shadow-xl max-w-sm z-20 space-y-3 backdrop-blur pointer-events-auto">
+            <!-- Floating Settings & Model Loader -->
+            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <h3 class="font-bold text-sm">Dashboard</h3>
-                    <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400">Exit Setup</button>
+                    <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard</h3>
+                    <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
                 </div>
                 
-                <!-- Dynamic connection code area -->
-                <div id="code-prompt" class="space-y-1">
-                    <span class="text-[10px] uppercase font-semibold text-slate-400 tracking-wider block">Connection Code</span>
+                <!-- Connection Status and Code -->
+                <div id="code-prompt" class="space-y-1 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider block">Link Code</span>
                     <div class="flex items-center gap-3">
                         <span id="display-peer-code" class="text-2xl font-mono font-bold text-teal-400">Generating...</span>
                         <span class="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Enter on phone</span>
                     </div>
                 </div>
 
-                <!-- Help details -->
-                <div class="text-[11px] text-slate-400 leading-relaxed pt-1">
-                    Open this app on your smartphone, select **Camera Source**, and type the code above to begin.
+                <!-- Custom 3D Model Uploader -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Load Custom 3D Model</label>
+                    <div class="flex flex-col gap-2">
+                        <!-- Direct File Upload -->
+                        <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
+                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload Mixamo .glb/.gltf</span>
+                            <input id="model-upload" type="file" accept=".glb,.gltf" class="hidden" onchange="handleModelFile(event)">
+                        </label>
+                        <!-- Fallback URL Loading -->
+                        <div class="flex gap-2">
+                            <input id="model-url" type="text" placeholder="Or enter GLB URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
+                            <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Model Information -->
+                <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
+                    <div><span class="font-semibold text-slate-300">Default Avatar:</span> Low-poly tracking mannequin.</div>
+                    <div>Upload a rigged <span class="text-teal-400 font-mono">.glb</span> model to test customized rigs instantly.</div>
                 </div>
             </div>
 
-            <!-- Floating Video PiP (Camera Feed) -->
+            <!-- Floating Video PiP -->
             <div id="pip-container" class="hidden absolute bottom-4 right-4 w-48 h-36 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
                 <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                <div class="absolute bottom-1 left-1 bg-black/60 text-[9px] px-1.5 py-0.5 rounded font-mono">Incoming Phone Feed</div>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-[9px] px-1.5 py-0.5 rounded font-mono">Phone Camera Feed</div>
             </div>
         </div>
     </main>
 
-    <!-- JS Logic -->
+    <!-- Scripting Core -->
     <script>
         let peer = null;
         let peerId = "";
@@ -129,13 +145,11 @@
         let poseDetector = null;
         let activeCall = null;
         
-        // UI Navigation
+        // Navigation Elements
         const setupView = document.getElementById('setup-view');
         const phoneView = document.getElementById('phone-view');
         const displayView = document.getElementById('display-view');
-        const statusBadge = document.getElementById('status-badge');
 
-        // Helper to generate clean, short connection codes (e.g. "ABCDE")
         function generateCode() {
             return Math.random().toString(36).substring(2, 7).toUpperCase();
         }
@@ -155,18 +169,15 @@
         }
 
         // ==========================================
-        // CAMERA SOURCE MODE (Smartphone Side)
+        // SMARTPHONE STREAMER LOGIC
         // ==========================================
         function startAsCamera() {
             setupView.classList.add('hidden');
             phoneView.classList.remove('hidden');
-            setStatus('offline', 'Source Config');
-
-            // Initialize PeerJS without static ID
+            setStatus('offline', 'Source Mode');
             peer = new Peer();
             peer.on('error', (err) => {
-                console.error("PeerJS error:", err);
-                alert("Connection error: " + err.message);
+                alert("Connection failed: " + err.message);
                 resetApp();
             });
         }
@@ -174,14 +185,12 @@
         async function connectToDisplay() {
             const codeInput = document.getElementById('target-peer-code').value.trim().toUpperCase();
             if (!codeInput) {
-                alert("Please enter the 5-digit code shown on the display screen.");
+                alert("Please enter the 5-digit code shown on the display PC.");
                 return;
             }
 
             setStatus('loading', 'Accessing Camera...');
-            
             try {
-                // Request back camera preferred (landscape optimization)
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
                     audio: false
@@ -191,8 +200,7 @@
                 document.getElementById('phone-input-container').classList.add('hidden');
                 document.getElementById('phone-stream-container').classList.remove('hidden');
                 
-                setStatus('loading', 'Connecting Peer...');
-                
+                setStatus('loading', 'Connecting...');
                 const targetPeerId = "WM-MOCAP-" + codeInput;
                 const call = peer.call(targetPeerId, localStream);
                 activeCall = call;
@@ -203,48 +211,42 @@
                 });
 
                 setStatus('connected', 'Live Streaming');
-
             } catch (err) {
-                console.error("Camera access failed", err);
-                alert("Could not access phone camera. Ensure HTTPS or run on localhost.");
-                setStatus('offline', 'Camera Access Blocked');
+                console.error(err);
+                alert("Camera access denied. Ensure this is served via HTTPS or localhost.");
+                setStatus('offline', 'Camera Blocked');
             }
         }
 
         // ==========================================
-        // DISPLAY SCREEN MODE (PC / Laptop Rendering)
+        // DISPLAY SCREEN ENGINE (PC Rendering)
         // ==========================================
         function startAsDisplay() {
             setupView.classList.add('hidden');
             displayView.classList.remove('hidden');
-            setStatus('loading', 'Initializing 3D...');
+            setStatus('loading', 'Initializing Environment...');
 
-            // Start up visual engine
             initThreeJS();
             initMediaPipe();
 
-            // Set up a custom easy-to-use signaling ID
             const pinCode = generateCode();
             peerId = "WM-MOCAP-" + pinCode;
             document.getElementById('display-peer-code').innerText = pinCode;
 
             peer = new Peer(peerId);
-            
             peer.on('open', () => {
-                setStatus('offline', 'Waiting for Phone...');
+                setStatus('offline', 'Awaiting Source...');
             });
 
-            // Accept incoming motion capture streams from the phone
             peer.on('call', (call) => {
-                setStatus('loading', 'Connecting video stream...');
-                call.answer(); // Handshake
+                setStatus('loading', 'Opening Stream...');
+                call.answer();
                 activeCall = call;
 
                 call.on('stream', (remoteStream) => {
                     const videoEl = document.getElementById('remote-video');
                     document.getElementById('pip-container').classList.remove('hidden');
                     videoEl.srcObject = remoteStream;
-                    
                     videoEl.onloadedmetadata = () => {
                         videoEl.play();
                         startFrameProcessing();
@@ -254,33 +256,21 @@
 
                 call.on('close', () => {
                     document.getElementById('pip-container').classList.add('hidden');
-                    setStatus('offline', 'Phone Disconnected');
+                    setStatus('offline', 'Disconnected');
                 });
-            });
-
-            peer.on('error', (err) => {
-                console.error("PeerJS registration error", err);
-                alert("Connection initialization failed. Please reload page.");
-                resetApp();
             });
         }
 
-        // ==========================================
-        // MEDIAPIPE FRAME DECODING ENGINE
-        // ==========================================
         function initMediaPipe() {
             poseDetector = new Pose({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
             });
-
             poseDetector.setOptions({
-                modelComplexity: 1, // 0 = Fast, 1 = Balanced, 2 = Heavy
+                modelComplexity: 1,
                 smoothLandmarks: true,
-                enableSegmentation: false,
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
-
             poseDetector.onResults(onPoseAnalysis);
         }
 
@@ -288,17 +278,15 @@
         function startFrameProcessing() {
             if (processingLoopActive) return;
             processingLoopActive = true;
-
             const videoElement = document.getElementById('remote-video');
             
             async function processFrame() {
                 if (!processingLoopActive) return;
-                
-                if (videoElement.readyState >= 2) { // Frame data fully buffered
+                if (videoElement.readyState >= 2) {
                     try {
                         await poseDetector.send({ image: videoElement });
-                    } catch (error) {
-                        console.error("Frame decoding error", error);
+                    } catch (e) {
+                        console.error("Pose analysis frame skip", e);
                     }
                 }
                 requestAnimationFrame(processFrame);
@@ -307,16 +295,42 @@
         }
 
         // ==========================================
-        // THREE.JS SKELETAL RIG ENGINE
+        // THREE.JS SCENE CREATION & RENDERING
         // ==========================================
         let scene, camera, renderer, controls;
-        let jointMeshes = {};
-        let boneMeshes = {};
-        let avatarGroup;
+        let loadedModel = null;
+        let resolvedBones = {}; // Populated dynamically upon importing any GLTF/GLB skeleton
 
-        // Visual joints mapping dictionary (matches MediaPipe 33 layout)
+        // Bones expected by universal mapping
+        const nameAliases = {
+            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint'],
+            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest'],
+            Neck: ['mixamorigNeck', 'Neck', 'bip_neck'],
+            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'bip_left_arm', 'upperarm_l'],
+            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'bip_left_forearm', 'lowerarm_l'],
+            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'bip_right_arm', 'upperarm_r'],
+            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'bip_right_forearm', 'lowerarm_r'],
+            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'bip_left_thigh', 'LeftThigh', 'thigh_l'],
+            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'bip_left_shin', 'LeftShin', 'calf_l'],
+            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'bip_right_thigh', 'RightThigh', 'thigh_r'],
+            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'bip_right_shin', 'RightShin', 'calf_r']
+        };
+
+        // Mathematical skeletal link maps for absolute point-to-rotation conversions
+        const BONE_RIG_LINKS = [
+            { bone: 'LeftArm', child: 'LeftForeArm', startJoint: 'leftShoulder', endJoint: 'leftElbow' },
+            { bone: 'LeftForeArm', child: 'LeftHand', startJoint: 'leftElbow', endJoint: 'leftWrist' },
+            { bone: 'RightArm', child: 'RightForeArm', startJoint: 'rightShoulder', endJoint: 'rightElbow' },
+            { bone: 'RightForeArm', child: 'RightHand', startJoint: 'rightElbow', endJoint: 'rightWrist' },
+            { bone: 'LeftUpLeg', child: 'LeftLeg', startJoint: 'leftHip', endJoint: 'leftKnee' },
+            { bone: 'LeftLeg', child: 'LeftFoot', startJoint: 'leftKnee', endJoint: 'leftAnkle' },
+            { bone: 'RightUpLeg', child: 'RightLeg', startJoint: 'rightHip', endJoint: 'rightKnee' },
+            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' },
+            { bone: 'Spine', child: 'Neck', startJoint: 'spineBottom', endJoint: 'spineTop' }
+        ];
+
+        // Maps MediaPipe joint indices to descriptive coordinates
         const jointIndices = {
-            nose: 0,
             leftShoulder: 11, rightShoulder: 12,
             leftElbow: 13, rightElbow: 14,
             leftWrist: 15, rightWrist: 16,
@@ -325,122 +339,317 @@
             leftAnkle: 27, rightAnkle: 28
         };
 
-        // Skeletal bone pairings to connect spheres
-        const connections = [
-            ['leftShoulder', 'rightShoulder'],
-            ['leftShoulder', 'leftElbow'],
-            ['leftElbow', 'leftWrist'],
-            ['rightShoulder', 'rightElbow'],
-            ['rightElbow', 'rightWrist'],
-            ['leftHip', 'rightHip'],
-            ['leftHip', 'leftKnee'],
-            ['leftKnee', 'leftAnkle'],
-            ['rightHip', 'rightKnee'],
-            ['rightKnee', 'rightAnkle'],
-            ['spineTop', 'spineBottom'], // Virtual torso alignment bone
-            ['nose', 'spineTop']          // Virtual neck bone
-        ];
-
         function initThreeJS() {
             const container = document.getElementById('canvas-container');
             
-            // 1. Scene setup
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0c14);
-            scene.fog = new THREE.FogExp2(0x0a0c14, 0.15);
+            scene.background = new THREE.Color(0x0f111a);
+            scene.fog = new THREE.FogExp2(0x0f111a, 0.12);
 
-            // 2. Camera setup
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-            camera.position.set(0, 1, 3.5);
+            camera.position.set(0, 1.2, 3);
 
-            // 3. Renderer setup
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
             container.appendChild(renderer.domElement);
 
-            // 4. Orbit Controls (Inspect scene)
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
-            controls.minDistance = 1;
-            controls.maxDistance = 15;
-            controls.target.set(0, 0.8, 0);
+            controls.target.set(0, 1.0, 0);
 
-            // 5. Environmental Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-            scene.add(ambientLight);
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambient);
 
-            const directLight = new THREE.DirectionalLight(0xffffff, 1);
-            directLight.position.set(5, 10, 5);
-            scene.add(directLight);
+            const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            keyLight.position.set(5, 8, 5);
+            keyLight.castShadow = true;
+            scene.add(keyLight);
 
-            // 6. Holographic Floor Grid System
-            const gridHelper = new THREE.GridHelper(10, 20, 0x0ea5e9, 0x1e293b);
-            gridHelper.position.y = -0.5;
-            scene.add(gridHelper);
+            // Tech Floor Matrix Grid
+            const grid = new THREE.GridHelper(10, 20, 0x14b8a6, 0x1e293b);
+            grid.position.y = 0;
+            scene.add(grid);
 
-            const floorGeo = new THREE.PlaneGeometry(10, 10);
-            const floorMat = new THREE.MeshStandardMaterial({ 
-                color: 0x05070c, 
-                roughness: 0.9, 
-                metalness: 0.1 
-            });
+            // Ground Plane
+            const floorGeo = new THREE.PlaneGeometry(15, 15);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x090b11, roughness: 0.8 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -0.51;
+            floor.position.y = -0.01;
+            floor.receiveShadow = true;
             scene.add(floor);
 
-            // 7. Initialize Avatar Rig Group
-            avatarGroup = new THREE.Group();
-            scene.add(avatarGroup);
+            // Load standard default mannequin rig
+            loadDefaultMannequin();
 
-            // Rig design materials
-            const materials = {
-                left: new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x0033aa, roughness: 0.1, metalness: 0.9 }), // Hologram Cyan
-                right: new THREE.MeshStandardMaterial({ color: 0xff007f, emissive: 0xaa0033, roughness: 0.1, metalness: 0.9 }), // Pink
-                center: new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0x7c2d12, roughness: 0.1, metalness: 0.9 }), // Amber (Base joints)
-                bone: new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.8, transparent: true, opacity: 0.9 })
-            };
-
-            // Build dynamic joint physical nodes
-            const sphereGeo = new THREE.SphereGeometry(0.045, 16, 16);
-            for (const name in jointIndices) {
-                let mat = materials.center;
-                if (name.startsWith('left')) mat = materials.left;
-                if (name.startsWith('right')) mat = materials.right;
-
-                // Create head/nose slightly larger
-                let currentGeo = (name === 'nose') ? new THREE.SphereGeometry(0.08, 16, 16) : sphereGeo;
-
-                const mesh = new THREE.Mesh(currentGeo, mat);
-                mesh.visible = false; // Hide until live video coordinates are acquired
-                avatarGroup.add(mesh);
-                jointMeshes[name] = mesh;
-            }
-
-            // Virtual spine joint visualizers
-            jointMeshes['spineTop'] = new THREE.Mesh(sphereGeo, materials.center);
-            jointMeshes['spineBottom'] = new THREE.Mesh(sphereGeo, materials.center);
-            jointMeshes['spineTop'].visible = false;
-            jointMeshes['spineBottom'].visible = false;
-            avatarGroup.add(jointMeshes['spineTop']);
-            avatarGroup.add(jointMeshes['spineBottom']);
-
-            // Build dynamic physical bone connectors
-            const cylGeo = new THREE.CylinderGeometry(0.02, 0.02, 1, 8); // Scaled dynamically in rotation loop
-            connections.forEach(([jointA, jointB]) => {
-                const mesh = new THREE.Mesh(cylGeo, materials.bone);
-                mesh.visible = false;
-                avatarGroup.add(mesh);
-                boneMeshes[`${jointA}-${jointB}`] = mesh;
-            });
-
-            // Start loop animation
+            // Run rendering sequence
             animate();
         }
 
-        // 3D Rendering Frame Clock
+        // ==========================================
+        // DEFAULT MANNEQUIN GENERATOR (If no GLTF uploaded)
+        // ==========================================
+        function loadDefaultMannequin() {
+            if (loadedModel) scene.remove(loadedModel);
+            resolvedBones = {};
+
+            // Build simple programmatic procedural model with bones
+            const group = new THREE.Group();
+            const helperSkeleton = new THREE.Group();
+            group.add(helperSkeleton);
+
+            // Create Hips Root
+            const hips = new THREE.Bone();
+            hips.name = "Hips";
+            hips.position.set(0, 1.0, 0);
+            helperSkeleton.add(hips);
+            resolvedBones.Hips = hips;
+
+            const spine = new THREE.Bone();
+            spine.name = "Spine";
+            spine.position.set(0, 0.3, 0);
+            hips.add(spine);
+            resolvedBones.Spine = spine;
+
+            const neck = new THREE.Bone();
+            neck.name = "Neck";
+            neck.position.set(0, 0.2, 0);
+            spine.add(neck);
+            resolvedBones.Neck = neck;
+
+            // Generate limbs hierarchically
+            const limbs = [
+                { parent: spine, name: 'LeftArm', pos: [0.15, 0.15, 0], childName: 'LeftForeArm', childPos: [0.25, 0, 0] },
+                { parent: spine, name: 'RightArm', pos: [-0.15, 0.15, 0], childName: 'RightForeArm', childPos: [-0.25, 0, 0] },
+                { parent: hips, name: 'LeftUpLeg', pos: [0.1, -0.05, 0], childName: 'LeftLeg', childPos: [0, -0.4, 0] },
+                { parent: hips, name: 'RightUpLeg', pos: [-0.1, -0.05, 0], childName: 'RightLeg', childPos: [0, -0.4, 0] }
+            ];
+
+            limbs.forEach(l => {
+                const pBone = new THREE.Bone();
+                pBone.name = l.name;
+                pBone.position.fromArray(l.pos);
+                l.parent.add(pBone);
+                resolvedBones[l.name] = pBone;
+
+                const cBone = new THREE.Bone();
+                cBone.name = l.childName;
+                cBone.position.fromArray(l.childPos);
+                pBone.add(cBone);
+                resolvedBones[l.childName] = cBone;
+            });
+
+            // Bind mesh skin structure to visualize
+            const skeleton = new THREE.Skeleton([
+                hips, spine, neck, 
+                resolvedBones.LeftArm, resolvedBones.LeftForeArm,
+                resolvedBones.RightArm, resolvedBones.RightForeArm,
+                resolvedBones.LeftUpLeg, resolvedBones.LeftLeg,
+                resolvedBones.RightUpLeg, resolvedBones.RightLeg
+            ]);
+
+            // Simple visualizer cubes for demonstration purposes
+            skeleton.bones.forEach((bone) => {
+                const boxGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, roughness: 0.1, metalness: 0.8 });
+                const visualMesh = new THREE.Mesh(boxGeo, boxMat);
+                bone.add(visualMesh);
+            });
+
+            scene.add(group);
+            loadedModel = group;
+
+            cacheRestDirections();
+            document.getElementById('model-info').innerHTML = `
+                <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin</div>
+                <div class="text-xs text-slate-500">Auto-generated skeleton model. Ready to trace motion.</div>
+            `;
+        }
+
+        // ==========================================
+        // CUSTOM MODEL LOADING (GLTF / GLB / MIXAMO)
+        // ==========================================
+        function handleModelFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            loadCustomModel(url, file.name);
+        }
+
+        function loadFromURLInput() {
+            const urlInput = document.getElementById('model-url').value.trim();
+            if (!urlInput) return;
+            loadCustomModel(urlInput, "External Source URL");
+        }
+
+        function loadCustomModel(url, nameString) {
+            setStatus('loading', 'Loading 3D Model...');
+            
+            const loader = new THREE.GLTFLoader();
+            loader.load(url, (gltf) => {
+                if (loadedModel) scene.remove(loadedModel);
+                resolvedBones = {};
+
+                loadedModel = gltf.scene;
+                scene.add(loadedModel);
+
+                // Auto-scale avatar to stand roughly 1.7 meters tall
+                const box = new THREE.Box3().setFromObject(loadedModel);
+                const size = box.getSize(new THREE.Vector3());
+                const currentHeight = size.y;
+                const scaleFactor = 1.7 / currentHeight;
+                loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+                // Re-center model on ground plane
+                loadedModel.position.set(0, 0, 0);
+
+                // Search standard skeletal hierarchies for mapping aliases
+                loadedModel.traverse((child) => {
+                    if (child.isBone) {
+                        for (const [key, aliases] of Object.entries(nameAliases)) {
+                            if (aliases.includes(child.name)) {
+                                resolvedBones[key] = child;
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                // Fallback detection (check name matching if alias database didn't resolve)
+                if (!resolvedBones.Hips) {
+                    loadedModel.traverse((child) => {
+                        if (child.isBone && (child.name.toLowerCase().includes('hip') || child.name.toLowerCase().includes('pelvis'))) {
+                            resolvedBones.Hips = child;
+                        }
+                    });
+                }
+
+                cacheRestDirections();
+
+                document.getElementById('model-info').innerHTML = `
+                    <div class="text-green-400 font-semibold">✓ Custom Model Configured Successfully</div>
+                    <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400">File:</span> ${nameString}</div>
+                    <div class="text-[10px] text-slate-400">Successfully matched <span class="font-semibold text-teal-400">${Object.keys(resolvedBones).length}/11</span> standard bones.</div>
+                `;
+
+                setStatus('connected', 'Skeletal Map Initialized');
+            }, 
+            (xhr) => {},
+            (error) => {
+                console.error("Custom loader error", error);
+                alert("Failed to load 3D skeletal rig. Verify formatting. Only standard .glb or .gltf animations are supported.");
+                loadDefaultMannequin();
+            });
+        }
+
+        // Precompute the directions of bones in standard rest pose space
+        function cacheRestDirections() {
+            BONE_RIG_LINKS.forEach((link) => {
+                const boneNode = resolvedBones[link.bone];
+                let childNode = resolvedBones[link.child];
+
+                // Dynamic child scanning fallback
+                if (!childNode && boneNode) {
+                    childNode = boneNode.children.find(c => c.isBone);
+                }
+
+                if (boneNode && childNode) {
+                    // Extract exact unit vector pointing to child in rest coordinate frame
+                    link.defaultLocalDir = childNode.position.clone().normalize();
+                } else {
+                    // Fallbacks for end bones
+                    if (link.bone.includes('Arm') || link.bone.includes('ForeArm')) {
+                        link.defaultLocalDir = new THREE.Vector3(link.bone.includes('Left') ? 1 : -1, 0, 0);
+                    } else if (link.bone.includes('Leg')) {
+                        link.defaultLocalDir = new THREE.Vector3(0, -1, 0);
+                    } else {
+                        link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
+                    }
+                }
+            });
+        }
+
+        // ==========================================
+        // REAL-TIME RETARGETING MATRICES MATH
+        // ==========================================
+        function onPoseAnalysis(results) {
+            if (!results.poseWorldLandmarks) return;
+
+            const worldLms = results.poseWorldLandmarks;
+            const jointCoords = {};
+            const minVisibility = 0.5;
+
+            // 1. Gather raw landmark coordinates
+            for (const [name, idx] of Object.entries(jointIndices)) {
+                const lm = worldLms[idx];
+                if (lm && lm.visibility > minVisibility) {
+                    jointCoords[name] = new THREE.Vector3(
+                        -lm.x, 
+                        -lm.y + 0.95, // Offset elevation to stand naturally over ground matrix
+                        -lm.z
+                    );
+                }
+            }
+
+            // Synthesize core spine landmarks
+            if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
+                jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
+            }
+            if (jointCoords.leftHip && jointCoords.rightHip) {
+                jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
+            }
+
+            // Dummy ankle values for legs mapping fallbacks
+            if (jointCoords.leftAnkle) jointCoords.leftFoot = jointCoords.leftAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
+            if (jointCoords.rightAnkle) jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
+
+            // 2. Perform Absolute-to-Local skeletal rotation transfers
+            BONE_RIG_LINKS.forEach((link) => {
+                const boneNode = resolvedBones[link.bone];
+                const startPos = jointCoords[link.startJoint];
+                const endPos = jointCoords[link.endJoint];
+
+                if (boneNode && startPos && endPos && link.defaultLocalDir) {
+                    // Extract absolute vector direction in 3D capture space
+                    const targetDirWorld = new THREE.Vector3().subVectors(endPos, startPos).normalize();
+
+                    // Project the world direction into the coordinate frame of the parent bone
+                    const targetDirLocal = targetDirWorld.clone();
+                    if (boneNode.parent) {
+                        const parentWorldQuatInverse = new THREE.Quaternion();
+                        boneNode.parent.getWorldQuaternion(parentWorldQuatInverse);
+                        parentWorldQuatInverse.invert();
+                        targetDirLocal.applyQuaternion(parentWorldQuatInverse);
+                    }
+
+                    // Compute clean quaternion to rotate default rest alignment into measured alignment
+                    const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
+
+                    // Interpolate smoothly (slerp) to prevent video noise/shaking
+                    boneNode.quaternion.slerp(rotationQuaternion, 0.25);
+                }
+            });
+
+            // 3. Compute vertical translations (Squats/Jumps)
+            if (resolvedBones.Hips && jointCoords.spineBottom) {
+                // Apply scaled vertical translation based on normalized spine offset
+                const targetY = jointCoords.spineBottom.y;
+                resolvedBones.Hips.position.y = THREE.MathUtils.lerp(resolvedBones.Hips.position.y, targetY, 0.2);
+                
+                // Mirror lateral and depth translations
+                resolvedBones.Hips.position.x = THREE.MathUtils.lerp(resolvedBones.Hips.position.x, jointCoords.spineBottom.x, 0.2);
+                resolvedBones.Hips.position.z = THREE.MathUtils.lerp(resolvedBones.Hips.position.z, jointCoords.spineBottom.z, 0.2);
+            }
+        }
+
+        // ==========================================
+        // MAIN CLOCK RENDERING LOOP
+        // ==========================================
         function animate() {
             requestAnimationFrame(animate);
             if (controls) controls.update();
@@ -450,106 +659,13 @@
         }
 
         // ==========================================
-        // LIVE MOTION MATH CORRELATION PIPELINE
-        // ==========================================
-        function onPoseAnalysis(results) {
-            if (!results.poseWorldLandmarks) return;
-
-            const worldLms = results.poseWorldLandmarks;
-            const jointCoords = {};
-            const minVisibility = 0.55;
-
-            // 1. Process Raw Coordinates & Mirror
-            for (const [name, idx] of Object.entries(jointIndices)) {
-                const lm = worldLms[idx];
-                if (lm && lm.visibility > minVisibility) {
-                    // Map coordinate frames: Mirror X, invert Y (positive is up), keep Z oriented
-                    jointCoords[name] = new THREE.Vector3(
-                        -lm.x, 
-                        -lm.y + 0.9, // Offset vertical height slightly relative to origin
-                        -lm.z
-                    );
-                }
-            }
-
-            // 2. Synthesize virtual joint values (Center Spine Line)
-            if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
-                jointCoords.spineTop = new THREE.Vector3()
-                    .addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder)
-                    .multiplyScalar(0.5);
-            }
-            if (jointCoords.leftHip && jointCoords.rightHip) {
-                jointCoords.spineBottom = new THREE.Vector3()
-                    .addVectors(jointCoords.leftHip, jointCoords.rightHip)
-                    .multiplyScalar(0.5);
-            }
-
-            // 3. Move Visual Sphere Nodes
-            for (const name in jointMeshes) {
-                const coord = jointCoords[name];
-                const mesh = jointMeshes[name];
-                if (coord && mesh) {
-                    mesh.position.copy(coord);
-                    mesh.visible = true;
-                } else if (mesh) {
-                    mesh.visible = false;
-                }
-            }
-
-            // 4. Stretch and Align Bone Cylinders
-            connections.forEach(([jointA, jointB]) => {
-                const mesh = boneMeshes[`${jointA}-${jointB}`];
-                const posA = jointCoords[jointA];
-                const posB = jointCoords[jointB];
-
-                if (mesh && posA && posB) {
-                    updateCylinderStretch(mesh, posA, posB);
-                    mesh.visible = true;
-                } else if (mesh) {
-                    mesh.visible = false;
-                }
-            });
-        }
-
-        // Rotates and scales cylinder mesh to bridge points A & B
-        function updateCylinderStretch(cylinderMesh, pointA, pointB) {
-            const dirVec = new THREE.Vector3().subVectors(pointB, pointA);
-            const len = dirVec.length();
-
-            // Locate exact center point
-            const midPoint = new THREE.Vector3().addVectors(pointA, pointB).multiplyScalar(0.5);
-            cylinderMesh.position.copy(midPoint);
-
-            // Stretch Y axis
-            cylinderMesh.scale.set(1, len, 1);
-
-            // Set Quaternion orientation rotation
-            dirVec.normalize();
-            const alignAxis = new THREE.Vector3(0, 1, 0); // Natural cylinder direction
-            cylinderMesh.quaternion.setFromUnitVectors(alignAxis, dirVec);
-        }
-
-        // Automatically scale canvas context on viewport change
-        window.addEventListener('resize', () => {
-            const container = document.getElementById('canvas-container');
-            if (camera && renderer && container) {
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, container.clientHeight);
-            }
-        });
-
-        // ==========================================
-        // TEARDOWN & RECOVERY MANAGEMENT
+        // SYSTEM TEARDOWN
         // ==========================================
         function resetApp() {
-            // Stop ongoing local tracks
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
-
-            // Clean up Peer resources
             if (activeCall) {
                 activeCall.close();
                 activeCall = null;
@@ -562,7 +678,6 @@
             processingLoopActive = false;
             setStatus('offline', 'Offline');
 
-            // Reset Interface views
             setupView.classList.remove('hidden');
             phoneView.classList.add('hidden');
             displayView.classList.add('hidden');
@@ -570,7 +685,6 @@
             document.getElementById('phone-input-container').classList.remove('hidden');
             document.getElementById('phone-stream-container').classList.add('hidden');
 
-            // Empty canvas elements if present
             const container = document.getElementById('canvas-container');
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
