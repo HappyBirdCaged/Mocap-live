@@ -2,42 +2,56 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Universal 3D Motion Capture & Rigging Platform</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Rig-Mirror 3D - Universal Mocap</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- OrbitControls -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- GLTFLoader & FBXLoader -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
-    <!-- PeerJS -->
+    
+    <!-- Three.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    
+    <!-- fflate (Decompression library required by FBXLoader in modern Three.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.0/umd/index.min.js"></script>
+    
+    <!-- Three.js Addons -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/FBXLoader.js"></script>
+    
+    <!-- PeerJS for WebRTC -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    
     <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
     <style>
-        /* smooth transitions and mobile improvements */
         .transition-all { transition: all 0.3s ease; }
-        video { transform: scaleX(-1); } /* mirror effect for natural feeling */
-        #remote-video { transform: scaleX(1); } /* keep remote video natural */
+        video { transform: scaleX(-1); }
+        #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
         @media (max-width: 640px) {
             #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
             #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
         }
-        /* Phone vertical stream hint */
-        .phone-hint { font-size: 11px; }
+        .loader-spinner {
+            border: 2px solid rgba(0, 243, 255, 0.2);
+            border-top: 2px solid #00f3ff;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
-
     <!-- Header -->
     <header class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between z-10 shrink-0">
         <div class="flex items-center gap-2">
             <span class="text-xl font-bold tracking-wider text-teal-400">⚡ Rig-Mirror 3D</span>
-            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">Mixamo · GLTF · FBX</span>
+            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">v2 • Improved</span>
         </div>
         <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
             <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
@@ -45,8 +59,7 @@
     </header>
 
     <!-- Main Viewport -->
-    <main class="relative flex-grow w-full">
-
+    <main class="relative flex-grow w-full overflow-hidden">
         <!-- 1. SETUP SCREEN -->
         <div id="setup-view" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-40 overflow-y-auto">
             <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
@@ -54,17 +67,14 @@
                     <h2 class="text-2xl font-bold mb-2 text-white">Choose Your Device Role</h2>
                     <p class="text-sm text-slate-400">Transform your phone into an intelligent motion-capture camera and mirror onto any 3D model on your computer.</p>
                 </div>
-
                 <div class="space-y-4">
                     <button onclick="startAsDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-xl font-semibold shadow-lg shadow-teal-900/30 transition-all duration-200">
                         🖥️ Display Screen (PC/Laptop)
                         <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models and handles motion analysis</span>
                     </button>
-
                     <div class="flex items-center justify-center gap-2 my-2 text-xs text-slate-500">
                         <span class="h-px bg-slate-800 flex-grow"></span> OR <span class="h-px bg-slate-800 flex-grow"></span>
                     </div>
-
                     <button onclick="startAsCamera()" class="w-full p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-semibold transition-all duration-200">
                         📱 Phone Camera Source
                         <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency camera data to PC</span>
@@ -73,19 +83,18 @@
             </div>
         </div>
 
-        <!-- 2. PHONE STREAMER VIEW (vertical friendly) -->
+        <!-- 2. PHONE STREAMER VIEW -->
         <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 z-30">
             <div class="max-w-sm w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
                 <h2 class="text-xl font-bold text-center">📱 Phone Camera Streamer</h2>
-                
+               
                 <div id="phone-input-container" class="space-y-3">
                     <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from PC Display</label>
-                    <input id="target-peer-code" type="text" placeholder="ABCDE" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
+                    <input id="target-peer-code" type="text" placeholder="ABCDE" maxlength="5" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
                     <button onclick="connectToDisplay()" class="w-full p-3 bg-teal-600 hover:bg-teal-500 font-semibold rounded-lg transition duration-200">
                         Establish Link & Stream
                     </button>
                 </div>
-
                 <div id="phone-stream-container" class="hidden space-y-4">
                     <div class="relative aspect-[9/16] bg-black border border-slate-800 rounded-lg overflow-hidden max-h-[60vh]">
                         <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
@@ -101,17 +110,15 @@
 
         <!-- 3. PC DISPLAY VIEW -->
         <div id="display-view" class="hidden absolute inset-0 w-full h-full">
-            <!-- Canvas Container -->
             <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
-
-            <!-- Floating Settings & Model Loader -->
+            
+            <!-- Floating Dashboard -->
             <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2">
                     <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard</h3>
                     <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
                 </div>
-                
-                <!-- Connection Status and Code -->
+               
                 <div id="code-prompt" class="space-y-1 bg-slate-950 p-3 rounded-xl border border-slate-800">
                     <span class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider block">Link Code</span>
                     <div class="flex items-center gap-3">
@@ -119,32 +126,29 @@
                         <span class="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Enter on phone</span>
                     </div>
                 </div>
-
-                <!-- Custom 3D Model Uploader (GLTF + FBX) -->
+                
+                <!-- Model Uploader -->
                 <div class="space-y-2">
                     <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Load Custom 3D Model</label>
                     <div class="flex flex-col gap-2">
-                        <!-- Direct File Upload (GLB/GLTF/FBX) -->
                         <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
                             <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload .glb / .gltf / .fbx</span>
                             <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
                         </label>
-                        <!-- Fallback URL Loading -->
                         <div class="flex gap-2">
                             <input id="model-url" type="text" placeholder="Or enter GLB/FBX URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
                             <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
                         </div>
                     </div>
                 </div>
-
-                <!-- Active Model Information -->
+                
                 <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
                     <div><span class="font-semibold text-slate-300">Default Avatar:</span> Low-poly tracking mannequin.</div>
                     <div>Upload a rigged <span class="text-teal-400 font-mono">.glb/.fbx</span> model to test customized rigs.</div>
                 </div>
             </div>
-
-            <!-- Floating Video PiP (smaller) -->
+            
+            <!-- Video PiP -->
             <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
                 <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
                 <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Phone Feed</div>
@@ -152,20 +156,27 @@
         </div>
     </main>
 
-    <!-- Scripting Core -->
     <script>
+        // ==================== CORE VARIABLES ====================
         let peer = null;
         let peerId = "";
         let localStream = null;
         let poseDetector = null;
         let activeCall = null;
         let processingLoopActive = false;
+        let lastProcessed = 0;
+        let modelLoadAttempts = 0;
         
-        // Navigation Elements
+        let scene, camera, renderer, controls;
+        let loadedModel = null;
+        let resolvedBones = {};
+        let animationFrameId = null;
+
         const setupView = document.getElementById('setup-view');
         const phoneView = document.getElementById('phone-view');
         const displayView = document.getElementById('display-view');
 
+        // ==================== UTILS ====================
         function generateCode() {
             return Math.random().toString(36).substring(2, 7).toUpperCase();
         }
@@ -184,9 +195,34 @@
             }
         }
 
-        // ==========================================
-        // SMARTPHONE STREAMER LOGIC
-        // ==========================================
+        function disposeThreeJS() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (renderer) {
+                renderer.dispose();
+                if (renderer.domElement && renderer.domElement.parentNode) {
+                    renderer.domElement.parentNode.removeChild(renderer.domElement);
+                }
+            }
+            if (loadedModel) {
+                loadedModel.traverse((child) => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
+            scene = camera = renderer = controls = loadedModel = null;
+            resolvedBones = {};
+        }
+
+        // ==================== PHONE MODE ====================
         function startAsCamera() {
             setupView.classList.add('hidden');
             phoneView.classList.remove('hidden');
@@ -200,66 +236,57 @@
 
         async function connectToDisplay() {
             const codeInput = document.getElementById('target-peer-code').value.trim().toUpperCase();
-            if (!codeInput) {
+            if (!codeInput || codeInput.length !== 5) {
                 alert("Please enter the 5-digit code shown on the display PC.");
                 return;
             }
-
             setStatus('loading', 'Accessing Camera...');
             try {
-                // Use portrait mode for vertical phone capture (ideal for full body)
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
                     audio: false
                 });
-
                 document.getElementById('local-video').srcObject = localStream;
                 document.getElementById('phone-input-container').classList.add('hidden');
                 document.getElementById('phone-stream-container').classList.remove('hidden');
-                
+               
                 setStatus('loading', 'Connecting...');
                 const targetPeerId = "WM-MOCAP-" + codeInput;
                 const call = peer.call(targetPeerId, localStream);
                 activeCall = call;
-
                 call.on('close', () => {
                     alert("Display connection lost.");
                     resetApp();
                 });
-
                 setStatus('connected', 'Live Streaming');
             } catch (err) {
                 console.error(err);
-                alert("Camera access denied. Ensure this is served via HTTPS or localhost.");
+                alert("Camera access failed. Ensure this is served via HTTPS or localhost.");
                 setStatus('offline', 'Camera Blocked');
             }
         }
 
-        // ==========================================
-        // DISPLAY SCREEN ENGINE (PC Rendering)
-        // ==========================================
+        // ==================== DISPLAY MODE ====================
         function startAsDisplay() {
             setupView.classList.add('hidden');
             displayView.classList.remove('hidden');
-            setStatus('loading', 'Initializing Environment...');
-
+            setStatus('loading', 'Initializing...');
+            
             initThreeJS();
             initMediaPipe();
-
+            
             const pinCode = generateCode();
             peerId = "WM-MOCAP-" + pinCode;
             document.getElementById('display-peer-code').innerText = pinCode;
-
+            
             peer = new Peer(peerId);
             peer.on('open', () => {
                 setStatus('offline', 'Awaiting Source...');
             });
-
             peer.on('call', (call) => {
                 setStatus('loading', 'Opening Stream...');
                 call.answer();
                 activeCall = call;
-
                 call.on('stream', (remoteStream) => {
                     const videoEl = document.getElementById('remote-video');
                     document.getElementById('pip-container').classList.remove('hidden');
@@ -267,10 +294,9 @@
                     videoEl.onloadedmetadata = () => {
                         videoEl.play();
                         startFrameProcessing();
-                        setStatus('connected', 'Mocap Tracking Active');
+                        setStatus('connected', 'Mocap Active');
                     };
                 });
-
                 call.on('close', () => {
                     document.getElementById('pip-container').classList.add('hidden');
                     setStatus('offline', 'Disconnected');
@@ -295,40 +321,40 @@
             if (processingLoopActive) return;
             processingLoopActive = true;
             const videoElement = document.getElementById('remote-video');
-            
+           
             async function processFrame() {
                 if (!processingLoopActive) return;
-                if (videoElement.readyState >= 2) {
-                    try {
-                        await poseDetector.send({ image: videoElement });
-                    } catch (e) {
-                        // silently skip frame
+                const now = Date.now();
+                if (now - lastProcessed > 45) { // Capped at ~22 FPS targeting performance optimization
+                    if (videoElement.readyState >= 2) {
+                        try {
+                            await poseDetector.send({ image: videoElement });
+                        } catch (e) {}
                     }
+                    lastProcessed = now;
                 }
                 requestAnimationFrame(processFrame);
             }
             processFrame();
         }
 
-        // ==========================================
-        // THREE.JS SCENE CREATION & RENDERING
-        // ==========================================
-        let scene, camera, renderer, controls;
-        let loadedModel = null;
-        let resolvedBones = {};
-
+        // ==================== THREE.JS SETUP & MAPPING ====================
         const nameAliases = {
-            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root'],
-            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2'],
-            Neck: ['mixamorigNeck', 'Neck', 'bip_neck', 'Neck1'],
-            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'bip_left_arm', 'upperarm_l', 'L_UpperArm'],
-            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'bip_left_forearm', 'lowerarm_l', 'L_Forearm'],
-            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'bip_right_arm', 'upperarm_r', 'R_UpperArm'],
-            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'bip_right_forearm', 'lowerarm_r', 'R_Forearm'],
-            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'bip_left_thigh', 'LeftThigh', 'thigh_l', 'L_Thigh'],
-            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'bip_left_shin', 'LeftShin', 'calf_l', 'L_Calf'],
-            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'bip_right_thigh', 'RightThigh', 'thigh_r', 'R_Thigh'],
-            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'bip_right_shin', 'RightShin', 'calf_r', 'R_Calf']
+            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root', 'mixamorig:Hips', 'hip', 'pelvis'],
+            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2', 'mixamorig:Spine', 'spine'],
+            Neck: ['mixamorigNeck', 'Neck', 'bip_neck', 'Neck1', 'mixamorig:Neck', 'neck'],
+            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'bip_left_arm', 'upperarm_l', 'L_UpperArm', 'mixamorig:LeftArm', 'l_upperarm'],
+            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'bip_left_forearm', 'lowerarm_l', 'L_Forearm', 'mixamorig:LeftForeArm', 'l_forearm'],
+            LeftHand: ['mixamorigLeftHand', 'LeftHand', 'bip_left_hand', 'hand_l', 'L_Hand', 'mixamorig:LeftHand', 'l_hand'],
+            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'bip_right_arm', 'upperarm_r', 'R_UpperArm', 'mixamorig:RightArm', 'r_upperarm'],
+            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'bip_right_forearm', 'lowerarm_r', 'R_Forearm', 'mixamorig:RightForeArm', 'r_forearm'],
+            RightHand: ['mixamorigRightHand', 'RightHand', 'bip_right_hand', 'hand_r', 'R_Hand', 'mixamorig:RightHand', 'r_hand'],
+            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'bip_left_thigh', 'LeftThigh', 'thigh_l', 'L_Thigh', 'mixamorig:LeftUpLeg', 'l_thigh'],
+            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'bip_left_shin', 'LeftShin', 'calf_l', 'L_Calf', 'mixamorig:LeftLeg', 'l_calf'],
+            LeftFoot: ['mixamorigLeftFoot', 'LeftFoot', 'bip_left_foot', 'foot_l', 'L_Foot', 'mixamorig:LeftFoot', 'l_foot', 'LeftAnkle', 'leftankle'],
+            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'bip_right_thigh', 'RightThigh', 'thigh_r', 'R_Thigh', 'mixamorig:RightUpLeg', 'r_thigh'],
+            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'bip_right_shin', 'RightShin', 'calf_r', 'R_Calf', 'mixamorig:RightLeg', 'r_calf'],
+            RightFoot: ['mixamorigRightFoot', 'RightFoot', 'bip_right_foot', 'foot_r', 'R_Foot', 'mixamorig:RightFoot', 'r_foot', 'RightAnkle', 'rightankle']
         };
 
         const BONE_RIG_LINKS = [
@@ -354,36 +380,38 @@
 
         function initThreeJS() {
             const container = document.getElementById('canvas-container');
-            
+            disposeThreeJS(); // Safe reset before initialization
+           
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0f111a);
             scene.fog = new THREE.FogExp2(0x0f111a, 0.12);
-
+            
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
             camera.position.set(0, 1.2, 3);
-
+            
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
             container.appendChild(renderer.domElement);
-
+            
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             controls.target.set(0, 1.0, 0);
-
+            
             const ambient = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambient);
+            
             const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
             keyLight.position.set(5, 8, 5);
             keyLight.castShadow = true;
             scene.add(keyLight);
-
+            
             const grid = new THREE.GridHelper(10, 20, 0x14b8a6, 0x1e293b);
             grid.position.y = 0;
             scene.add(grid);
-
+            
             const floorGeo = new THREE.PlaneGeometry(15, 15);
             const floorMat = new THREE.MeshStandardMaterial({ color: 0x090b11, roughness: 0.8 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -391,86 +419,93 @@
             floor.position.y = -0.01;
             floor.receiveShadow = true;
             scene.add(floor);
-
+            
             loadDefaultMannequin();
             animate();
+            window.addEventListener('resize', onWindowResize);
         }
 
-        // Default mannequin (procedural)
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
         function loadDefaultMannequin() {
             if (loadedModel) scene.remove(loadedModel);
             resolvedBones = {};
-
+            
             const group = new THREE.Group();
             const helperSkeleton = new THREE.Group();
             group.add(helperSkeleton);
-
+            
             const hips = new THREE.Bone();
             hips.name = "Hips";
             hips.position.set(0, 1.0, 0);
             helperSkeleton.add(hips);
             resolvedBones.Hips = hips;
-
+            
             const spine = new THREE.Bone();
             spine.name = "Spine";
             spine.position.set(0, 0.3, 0);
             hips.add(spine);
             resolvedBones.Spine = spine;
-
+            
             const neck = new THREE.Bone();
             neck.name = "Neck";
             neck.position.set(0, 0.2, 0);
             spine.add(neck);
             resolvedBones.Neck = neck;
-
+            
             const limbs = [
                 { parent: spine, name: 'LeftArm', pos: [0.15, 0.15, 0], childName: 'LeftForeArm', childPos: [0.25, 0, 0] },
                 { parent: spine, name: 'RightArm', pos: [-0.15, 0.15, 0], childName: 'RightForeArm', childPos: [-0.25, 0, 0] },
                 { parent: hips, name: 'LeftUpLeg', pos: [0.1, -0.05, 0], childName: 'LeftLeg', childPos: [0, -0.4, 0] },
                 { parent: hips, name: 'RightUpLeg', pos: [-0.1, -0.05, 0], childName: 'RightLeg', childPos: [0, -0.4, 0] }
             ];
-
+            
             limbs.forEach(l => {
                 const pBone = new THREE.Bone();
                 pBone.name = l.name;
                 pBone.position.fromArray(l.pos);
                 l.parent.add(pBone);
                 resolvedBones[l.name] = pBone;
-
+                
                 const cBone = new THREE.Bone();
                 cBone.name = l.childName;
                 cBone.position.fromArray(l.childPos);
                 pBone.add(cBone);
                 resolvedBones[l.childName] = cBone;
             });
-
+            
             const skeleton = new THREE.Skeleton([
-                hips, spine, neck, 
+                hips, spine, neck,
                 resolvedBones.LeftArm, resolvedBones.LeftForeArm,
                 resolvedBones.RightArm, resolvedBones.RightForeArm,
                 resolvedBones.LeftUpLeg, resolvedBones.LeftLeg,
                 resolvedBones.RightUpLeg, resolvedBones.RightLeg
             ]);
-
+            
             skeleton.bones.forEach((bone) => {
                 const boxGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
                 const boxMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, roughness: 0.1, metalness: 0.8 });
                 const visualMesh = new THREE.Mesh(boxGeo, boxMat);
                 bone.add(visualMesh);
             });
-
+            
             scene.add(group);
             loadedModel = group;
             cacheRestDirections();
+            
             document.getElementById('model-info').innerHTML = `
                 <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin</div>
-                <div class="text-xs text-slate-500">Auto-generated skeleton model. Ready to trace motion.</div>
+                <div class="text-xs text-slate-500">Auto-generated skeleton. Ready to trace motion.</div>
             `;
         }
 
-        // ==========================================
-        // CUSTOM MODEL LOADING (GLTF / GLB / FBX)
-        // ==========================================
+        // ==================== MODEL LOADING ====================
         function handleModelFile(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -481,93 +516,150 @@
         function loadFromURLInput() {
             const urlInput = document.getElementById('model-url').value.trim();
             if (!urlInput) return;
-            loadCustomModel(urlInput, "External Source URL");
+            loadCustomModel(urlInput, "External URL");
         }
 
         function loadCustomModel(url, nameString) {
-            setStatus('loading', 'Loading 3D Model...');
-            
-            // Detect FBX vs GLTF
+            setStatus('loading', 'Loading Model...');
+            modelLoadAttempts++;
+           
             const isFBX = url.toLowerCase().includes('.fbx') || nameString.toLowerCase().includes('.fbx');
             const loader = isFBX ? new THREE.FBXLoader() : new THREE.GLTFLoader();
-            
+           
             const loadCallback = (asset) => {
                 let model = isFBX ? asset : asset.scene;
+                
                 if (loadedModel) scene.remove(loadedModel);
                 resolvedBones = {};
-
                 loadedModel = model;
                 scene.add(loadedModel);
-
-                // Auto-scale to ~1.7m
+                
+                // Auto-scale to baseline ~1.7m
                 const box = new THREE.Box3().setFromObject(loadedModel);
                 const size = box.getSize(new THREE.Vector3());
                 const currentHeight = size.y;
-                if (currentHeight > 0.01) {
+                if (currentHeight > 0.01 && currentHeight < 10) {
                     const scaleFactor = 1.7 / currentHeight;
                     loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
                 }
                 loadedModel.position.set(0, 0, 0);
-
-                // Map bones
+                
+                // Enhanced bone mapping traverse passes
+                let boneCount = 0;
                 loadedModel.traverse((child) => {
-                    if (child.isBone) {
+                    if (child.isBone || child.type === 'Bone') {
+                        boneCount++;
+                        let matched = false;
                         for (const [key, aliases] of Object.entries(nameAliases)) {
-                            if (aliases.includes(child.name)) {
-                                resolvedBones[key] = child;
-                                break;
+                            const childNameLower = child.name.toLowerCase();
+                            for (const alias of aliases) {
+                                const aliasLower = alias.toLowerCase();
+                                if (child.name === alias || childNameLower === aliasLower ||
+                                    childNameLower.includes(aliasLower) || aliasLower.includes(childNameLower)) {
+                                    if (!resolvedBones[key]) {
+                                        resolvedBones[key] = child;
+                                        matched = true;
+                                        break;
+                                    }
+                                }
                             }
+                            if (matched) break;
                         }
                     }
                 });
 
-                // Fallback
-                if (!resolvedBones.Hips) {
+                // Failover Pass: More aggressive search
+                if (Object.keys(resolvedBones).length < 8) {
                     loadedModel.traverse((child) => {
-                        if (child.isBone && (child.name.toLowerCase().includes('hip') || child.name.toLowerCase().includes('pelvis'))) {
-                            resolvedBones.Hips = child;
+                        if (child.isBone || child.type === 'Bone') {
+                            const name = child.name.toLowerCase();
+                            for (const [key, aliases] of Object.entries(nameAliases)) {
+                                if (resolvedBones[key]) continue;
+                                for (const alias of aliases) {
+                                    const aliasLower = alias.toLowerCase();
+                                    if (name.includes(aliasLower) || aliasLower.includes(name)) {
+                                        resolvedBones[key] = child;
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     });
                 }
 
+                // Final Fallback: Direct lookup for vital root node
+                if (!resolvedBones.Hips) {
+                    let hipsCandidate = null;
+                    loadedModel.traverse((child) => {
+                        if ((child.isBone || child.type === 'Bone') && 
+                            (child.name.toLowerCase().includes('hip') || 
+                             child.name.toLowerCase().includes('pelvis') || 
+                             child.name.toLowerCase().includes('root'))) {
+                            hipsCandidate = child;
+                        }
+                    });
+                    if (hipsCandidate) resolvedBones.Hips = hipsCandidate;
+                }
+
                 cacheRestDirections();
-
+                
+                const boneCountStr = Object.keys(resolvedBones).length;
                 document.getElementById('model-info').innerHTML = `
-                    <div class="text-green-400 font-semibold">✓ Custom Model Configured</div>
+                    <div class="text-green-400 font-semibold">✓ Model Loaded Successfully</div>
                     <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400">File:</span> ${nameString}</div>
-                    <div class="text-[10px] text-slate-400">Matched <span class="font-semibold text-teal-400">${Object.keys(resolvedBones).length}/11</span> standard bones.</div>
+                    <div class="text-[10px] text-slate-400">Matched <span class="font-semibold text-teal-400">${boneCountStr}/15</span> mapped bones. (Total bones found: ${boneCount})</div>
                 `;
-
                 setStatus('connected', 'Skeletal Map Ready');
+
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
             };
 
             const errorCallback = (err) => {
-                console.error("Loader error", err);
-                alert("Failed to load 3D skeletal rig. Only .glb, .gltf, .fbx with standard skeleton supported.");
-                loadDefaultMannequin();
+                console.error("Loader error:", err);
+                if (!isFBX && modelLoadAttempts < 3) {
+                    console.log("Retrying load request with alternative loader context...");
+                    const fbxLoader = new THREE.FBXLoader();
+                    fbxLoader.load(url, loadCallback, undefined, (fbxErr) => {
+                        console.error("Backup FBX loader call failed:", fbxErr);
+                        alert("Could not parser the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
+                        loadDefaultMannequin();
+                    });
+                } else {
+                    alert("Could not parser the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
+                    loadDefaultMannequin();
+                }
+
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
             };
 
-            if (isFBX) {
-                loader.load(url, loadCallback, undefined, errorCallback);
-            } else {
-                loader.load(url, loadCallback, undefined, errorCallback);
-            }
+            loader.load(url, loadCallback, undefined, errorCallback);
         }
 
-        // Precompute bone rest directions
         function cacheRestDirections() {
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 let childNode = resolvedBones[link.child];
                 if (!childNode && boneNode) {
-                    childNode = boneNode.children.find(c => c.isBone);
+                    childNode = boneNode.children.find(c => c.isBone || c.type === 'Bone');
                 }
                 if (boneNode && childNode) {
-                    link.defaultLocalDir = childNode.position.clone().normalize();
+                    const dir = childNode.position.clone();
+                    if (dir.length() > 0.001) {
+                        link.defaultLocalDir = dir.normalize();
+                    } else {
+                        link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
+                    }
                 } else {
-                    if (link.bone.includes('Arm') || link.bone.includes('ForeArm')) {
-                        link.defaultLocalDir = new THREE.Vector3(link.bone.includes('Left') ? 1 : -1, 0, 0);
-                    } else if (link.bone.includes('Leg')) {
+                    // Positional guesses based on structural standard orientations
+                    if (link.bone.includes('Left') || link.bone.includes('left')) {
+                        link.defaultLocalDir = new THREE.Vector3(1, 0, 0);
+                    } else if (link.bone.includes('Right') || link.bone.includes('right')) {
+                        link.defaultLocalDir = new THREE.Vector3(-1, 0, 0);
+                    } else if (link.bone.includes('Leg') || link.bone.includes('leg')) {
                         link.defaultLocalDir = new THREE.Vector3(0, -1, 0);
                     } else {
                         link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
@@ -576,40 +668,42 @@
             });
         }
 
-        // ==========================================
-        // REAL-TIME RETARGETING
-        // ==========================================
+        // ==================== POSE PROCESSING ====================
         function onPoseAnalysis(results) {
             if (!results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
             const minVisibility = 0.5;
-
+            
             for (const [name, idx] of Object.entries(jointIndices)) {
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
-                        -lm.x, 
+                        -lm.x,
                         -lm.y + 0.95,
                         -lm.z
                     );
                 }
             }
-
+            
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
             }
             if (jointCoords.leftHip && jointCoords.rightHip) {
                 jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
             }
-            if (jointCoords.leftAnkle) jointCoords.leftFoot = jointCoords.leftAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
-            if (jointCoords.rightAnkle) jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
-
+            if (jointCoords.leftAnkle) {
+                jointCoords.leftFoot = jointCoords.leftAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
+            }
+            if (jointCoords.rightAnkle) {
+                jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
+            }
+            
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
                 const endPos = jointCoords[link.endJoint];
-
+                
                 if (boneNode && startPos && endPos && link.defaultLocalDir) {
                     const targetDirWorld = new THREE.Vector3().subVectors(endPos, startPos).normalize();
                     const targetDirLocal = targetDirWorld.clone();
@@ -623,30 +717,31 @@
                     boneNode.quaternion.slerp(rotationQuaternion, 0.25);
                 }
             });
-
+            
+            // Scaled positioning calculations for root bone translating 
             if (resolvedBones.Hips && jointCoords.spineBottom) {
-                const targetY = jointCoords.spineBottom.y;
+                const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
+                const targetX = jointCoords.spineBottom.x / scaleY;
+                const targetY = jointCoords.spineBottom.y / scaleY;
+                const targetZ = jointCoords.spineBottom.z / scaleY;
+                
                 resolvedBones.Hips.position.y = THREE.MathUtils.lerp(resolvedBones.Hips.position.y, targetY, 0.2);
-                resolvedBones.Hips.position.x = THREE.MathUtils.lerp(resolvedBones.Hips.position.x, jointCoords.spineBottom.x, 0.2);
-                resolvedBones.Hips.position.z = THREE.MathUtils.lerp(resolvedBones.Hips.position.z, jointCoords.spineBottom.z, 0.2);
+                resolvedBones.Hips.position.x = THREE.MathUtils.lerp(resolvedBones.Hips.position.x, targetX, 0.2);
+                resolvedBones.Hips.position.z = THREE.MathUtils.lerp(resolvedBones.Hips.position.z, targetZ, 0.2);
             }
         }
 
-        // ==========================================
-        // RENDER LOOP
-        // ==========================================
         function animate() {
-            requestAnimationFrame(animate);
+            animationFrameId = requestAnimationFrame(animate);
             if (controls) controls.update();
             if (renderer && scene && camera) {
                 renderer.render(scene, camera);
             }
         }
 
-        // ==========================================
-        // TEARDOWN
-        // ==========================================
+        // ==================== DECONSTRUCTION & RESET ====================
         function resetApp() {
+            processingLoopActive = false;
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
@@ -659,21 +754,33 @@
                 peer.destroy();
                 peer = null;
             }
-            processingLoopActive = false;
-            setStatus('offline', 'Offline');
+            
+            disposeThreeJS();
+            window.removeEventListener('resize', onWindowResize);
 
+            // Revert DOM states
             setupView.classList.remove('hidden');
             phoneView.classList.add('hidden');
             displayView.classList.add('hidden');
             document.getElementById('pip-container').classList.add('hidden');
             document.getElementById('phone-input-container').classList.remove('hidden');
             document.getElementById('phone-stream-container').classList.add('hidden');
-
+            
             const container = document.getElementById('canvas-container');
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
             }
+            
+            setStatus('offline', 'Offline');
         }
+
+        // Global context mappings
+        window.startAsDisplay = startAsDisplay;
+        window.startAsCamera = startAsCamera;
+        window.connectToDisplay = connectToDisplay;
+        window.resetApp = resetApp;
+        window.handleModelFile = handleModelFile;
+        window.loadFromURLInput = loadFromURLInput;
     </script>
 </body>
 </html>
