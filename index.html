@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Universal 3D Motion Capture & Rigging Platform</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -10,20 +10,34 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OrbitControls -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- GLTFLoader to read custom .glb / .gltf files -->
+    <!-- GLTFLoader & FBXLoader -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
     <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        /* smooth transitions and mobile improvements */
+        .transition-all { transition: all 0.3s ease; }
+        video { transform: scaleX(-1); } /* mirror effect for natural feeling */
+        #remote-video { transform: scaleX(1); } /* keep remote video natural */
+        #local-video { transform: scaleX(-1); }
+        @media (max-width: 640px) {
+            #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
+            #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
+        }
+        /* Phone vertical stream hint */
+        .phone-hint { font-size: 11px; }
+    </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
 
     <!-- Header -->
-    <header class="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-10 shrink-0">
-        <div class="flex items-center gap-3">
+    <header class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center gap-2">
             <span class="text-xl font-bold tracking-wider text-teal-400">⚡ Rig-Mirror 3D</span>
-            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono">Mixamo & GLTF Compatible</span>
+            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">Mixamo · GLTF · FBX</span>
         </div>
         <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
             <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
@@ -59,9 +73,9 @@
             </div>
         </div>
 
-        <!-- 2. PHONE STREAMER VIEW -->
+        <!-- 2. PHONE STREAMER VIEW (vertical friendly) -->
         <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 z-30">
-            <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
+            <div class="max-w-sm w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
                 <h2 class="text-xl font-bold text-center">📱 Phone Camera Streamer</h2>
                 
                 <div id="phone-input-container" class="space-y-3">
@@ -73,10 +87,11 @@
                 </div>
 
                 <div id="phone-stream-container" class="hidden space-y-4">
-                    <div class="relative aspect-video bg-black border border-slate-800 rounded-lg overflow-hidden">
-                        <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
+                    <div class="relative aspect-[9/16] bg-black border border-slate-800 rounded-lg overflow-hidden max-h-[60vh]">
+                        <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                        <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-slate-300">📹 Live</div>
                     </div>
-                    <p class="text-xs text-slate-400 text-center">💡 Prop your phone up horizontally (landscape) and ensure your full body is visible.</p>
+                    <p class="text-xs text-slate-400 text-center">📱 Hold your phone <span class="font-bold text-white">vertically</span> for best full-body capture. Ensure good lighting.</p>
                     <button onclick="resetApp()" class="w-full p-3 bg-red-600 hover:bg-red-500 font-semibold rounded-lg transition duration-200">
                         Disconnect Stream
                     </button>
@@ -105,18 +120,18 @@
                     </div>
                 </div>
 
-                <!-- Custom 3D Model Uploader -->
+                <!-- Custom 3D Model Uploader (GLTF + FBX) -->
                 <div class="space-y-2">
                     <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Load Custom 3D Model</label>
                     <div class="flex flex-col gap-2">
-                        <!-- Direct File Upload -->
+                        <!-- Direct File Upload (GLB/GLTF/FBX) -->
                         <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
-                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload Mixamo .glb/.gltf</span>
-                            <input id="model-upload" type="file" accept=".glb,.gltf" class="hidden" onchange="handleModelFile(event)">
+                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload .glb / .gltf / .fbx</span>
+                            <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
                         </label>
                         <!-- Fallback URL Loading -->
                         <div class="flex gap-2">
-                            <input id="model-url" type="text" placeholder="Or enter GLB URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
+                            <input id="model-url" type="text" placeholder="Or enter GLB/FBX URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
                             <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
                         </div>
                     </div>
@@ -125,14 +140,14 @@
                 <!-- Active Model Information -->
                 <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
                     <div><span class="font-semibold text-slate-300">Default Avatar:</span> Low-poly tracking mannequin.</div>
-                    <div>Upload a rigged <span class="text-teal-400 font-mono">.glb</span> model to test customized rigs instantly.</div>
+                    <div>Upload a rigged <span class="text-teal-400 font-mono">.glb/.fbx</span> model to test customized rigs.</div>
                 </div>
             </div>
 
-            <!-- Floating Video PiP -->
-            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-48 h-36 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
+            <!-- Floating Video PiP (smaller) -->
+            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
                 <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                <div class="absolute bottom-1 left-1 bg-black/60 text-[9px] px-1.5 py-0.5 rounded font-mono">Phone Camera Feed</div>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Phone Feed</div>
             </div>
         </div>
     </main>
@@ -144,6 +159,7 @@
         let localStream = null;
         let poseDetector = null;
         let activeCall = null;
+        let processingLoopActive = false;
         
         // Navigation Elements
         const setupView = document.getElementById('setup-view');
@@ -191,8 +207,9 @@
 
             setStatus('loading', 'Accessing Camera...');
             try {
+                // Use portrait mode for vertical phone capture (ideal for full body)
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+                    video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
                     audio: false
                 });
 
@@ -274,7 +291,6 @@
             poseDetector.onResults(onPoseAnalysis);
         }
 
-        let processingLoopActive = false;
         function startFrameProcessing() {
             if (processingLoopActive) return;
             processingLoopActive = true;
@@ -286,7 +302,7 @@
                     try {
                         await poseDetector.send({ image: videoElement });
                     } catch (e) {
-                        console.error("Pose analysis frame skip", e);
+                        // silently skip frame
                     }
                 }
                 requestAnimationFrame(processFrame);
@@ -299,24 +315,22 @@
         // ==========================================
         let scene, camera, renderer, controls;
         let loadedModel = null;
-        let resolvedBones = {}; // Populated dynamically upon importing any GLTF/GLB skeleton
+        let resolvedBones = {};
 
-        // Bones expected by universal mapping
         const nameAliases = {
-            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint'],
-            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest'],
-            Neck: ['mixamorigNeck', 'Neck', 'bip_neck'],
-            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'bip_left_arm', 'upperarm_l'],
-            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'bip_left_forearm', 'lowerarm_l'],
-            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'bip_right_arm', 'upperarm_r'],
-            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'bip_right_forearm', 'lowerarm_r'],
-            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'bip_left_thigh', 'LeftThigh', 'thigh_l'],
-            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'bip_left_shin', 'LeftShin', 'calf_l'],
-            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'bip_right_thigh', 'RightThigh', 'thigh_r'],
-            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'bip_right_shin', 'RightShin', 'calf_r']
+            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root'],
+            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2'],
+            Neck: ['mixamorigNeck', 'Neck', 'bip_neck', 'Neck1'],
+            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'bip_left_arm', 'upperarm_l', 'L_UpperArm'],
+            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'bip_left_forearm', 'lowerarm_l', 'L_Forearm'],
+            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'bip_right_arm', 'upperarm_r', 'R_UpperArm'],
+            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'bip_right_forearm', 'lowerarm_r', 'R_Forearm'],
+            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'bip_left_thigh', 'LeftThigh', 'thigh_l', 'L_Thigh'],
+            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'bip_left_shin', 'LeftShin', 'calf_l', 'L_Calf'],
+            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'bip_right_thigh', 'RightThigh', 'thigh_r', 'R_Thigh'],
+            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'bip_right_shin', 'RightShin', 'calf_r', 'R_Calf']
         };
 
-        // Mathematical skeletal link maps for absolute point-to-rotation conversions
         const BONE_RIG_LINKS = [
             { bone: 'LeftArm', child: 'LeftForeArm', startJoint: 'leftShoulder', endJoint: 'leftElbow' },
             { bone: 'LeftForeArm', child: 'LeftHand', startJoint: 'leftElbow', endJoint: 'leftWrist' },
@@ -329,7 +343,6 @@
             { bone: 'Spine', child: 'Neck', startJoint: 'spineBottom', endJoint: 'spineTop' }
         ];
 
-        // Maps MediaPipe joint indices to descriptive coordinates
         const jointIndices = {
             leftShoulder: 11, rightShoulder: 12,
             leftElbow: 13, rightElbow: 14,
@@ -360,21 +373,17 @@
             controls.dampingFactor = 0.05;
             controls.target.set(0, 1.0, 0);
 
-            // Lighting
             const ambient = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambient);
-
             const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
             keyLight.position.set(5, 8, 5);
             keyLight.castShadow = true;
             scene.add(keyLight);
 
-            // Tech Floor Matrix Grid
             const grid = new THREE.GridHelper(10, 20, 0x14b8a6, 0x1e293b);
             grid.position.y = 0;
             scene.add(grid);
 
-            // Ground Plane
             const floorGeo = new THREE.PlaneGeometry(15, 15);
             const floorMat = new THREE.MeshStandardMaterial({ color: 0x090b11, roughness: 0.8 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -383,26 +392,19 @@
             floor.receiveShadow = true;
             scene.add(floor);
 
-            // Load standard default mannequin rig
             loadDefaultMannequin();
-
-            // Run rendering sequence
             animate();
         }
 
-        // ==========================================
-        // DEFAULT MANNEQUIN GENERATOR (If no GLTF uploaded)
-        // ==========================================
+        // Default mannequin (procedural)
         function loadDefaultMannequin() {
             if (loadedModel) scene.remove(loadedModel);
             resolvedBones = {};
 
-            // Build simple programmatic procedural model with bones
             const group = new THREE.Group();
             const helperSkeleton = new THREE.Group();
             group.add(helperSkeleton);
 
-            // Create Hips Root
             const hips = new THREE.Bone();
             hips.name = "Hips";
             hips.position.set(0, 1.0, 0);
@@ -421,7 +423,6 @@
             spine.add(neck);
             resolvedBones.Neck = neck;
 
-            // Generate limbs hierarchically
             const limbs = [
                 { parent: spine, name: 'LeftArm', pos: [0.15, 0.15, 0], childName: 'LeftForeArm', childPos: [0.25, 0, 0] },
                 { parent: spine, name: 'RightArm', pos: [-0.15, 0.15, 0], childName: 'RightForeArm', childPos: [-0.25, 0, 0] },
@@ -443,7 +444,6 @@
                 resolvedBones[l.childName] = cBone;
             });
 
-            // Bind mesh skin structure to visualize
             const skeleton = new THREE.Skeleton([
                 hips, spine, neck, 
                 resolvedBones.LeftArm, resolvedBones.LeftForeArm,
@@ -452,9 +452,8 @@
                 resolvedBones.RightUpLeg, resolvedBones.RightLeg
             ]);
 
-            // Simple visualizer cubes for demonstration purposes
             skeleton.bones.forEach((bone) => {
-                const boxGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+                const boxGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
                 const boxMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, roughness: 0.1, metalness: 0.8 });
                 const visualMesh = new THREE.Mesh(boxGeo, boxMat);
                 bone.add(visualMesh);
@@ -462,7 +461,6 @@
 
             scene.add(group);
             loadedModel = group;
-
             cacheRestDirections();
             document.getElementById('model-info').innerHTML = `
                 <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin</div>
@@ -471,12 +469,11 @@
         }
 
         // ==========================================
-        // CUSTOM MODEL LOADING (GLTF / GLB / MIXAMO)
+        // CUSTOM MODEL LOADING (GLTF / GLB / FBX)
         // ==========================================
         function handleModelFile(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const url = URL.createObjectURL(file);
             loadCustomModel(url, file.name);
         }
@@ -490,25 +487,29 @@
         function loadCustomModel(url, nameString) {
             setStatus('loading', 'Loading 3D Model...');
             
-            const loader = new THREE.GLTFLoader();
-            loader.load(url, (gltf) => {
+            // Detect FBX vs GLTF
+            const isFBX = url.toLowerCase().includes('.fbx') || nameString.toLowerCase().includes('.fbx');
+            const loader = isFBX ? new THREE.FBXLoader() : new THREE.GLTFLoader();
+            
+            const loadCallback = (asset) => {
+                let model = isFBX ? asset : asset.scene;
                 if (loadedModel) scene.remove(loadedModel);
                 resolvedBones = {};
 
-                loadedModel = gltf.scene;
+                loadedModel = model;
                 scene.add(loadedModel);
 
-                // Auto-scale avatar to stand roughly 1.7 meters tall
+                // Auto-scale to ~1.7m
                 const box = new THREE.Box3().setFromObject(loadedModel);
                 const size = box.getSize(new THREE.Vector3());
                 const currentHeight = size.y;
-                const scaleFactor = 1.7 / currentHeight;
-                loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-                // Re-center model on ground plane
+                if (currentHeight > 0.01) {
+                    const scaleFactor = 1.7 / currentHeight;
+                    loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                }
                 loadedModel.position.set(0, 0, 0);
 
-                // Search standard skeletal hierarchies for mapping aliases
+                // Map bones
                 loadedModel.traverse((child) => {
                     if (child.isBone) {
                         for (const [key, aliases] of Object.entries(nameAliases)) {
@@ -520,7 +521,7 @@
                     }
                 });
 
-                // Fallback detection (check name matching if alias database didn't resolve)
+                // Fallback
                 if (!resolvedBones.Hips) {
                     loadedModel.traverse((child) => {
                         if (child.isBone && (child.name.toLowerCase().includes('hip') || child.name.toLowerCase().includes('pelvis'))) {
@@ -532,37 +533,38 @@
                 cacheRestDirections();
 
                 document.getElementById('model-info').innerHTML = `
-                    <div class="text-green-400 font-semibold">✓ Custom Model Configured Successfully</div>
+                    <div class="text-green-400 font-semibold">✓ Custom Model Configured</div>
                     <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400">File:</span> ${nameString}</div>
-                    <div class="text-[10px] text-slate-400">Successfully matched <span class="font-semibold text-teal-400">${Object.keys(resolvedBones).length}/11</span> standard bones.</div>
+                    <div class="text-[10px] text-slate-400">Matched <span class="font-semibold text-teal-400">${Object.keys(resolvedBones).length}/11</span> standard bones.</div>
                 `;
 
-                setStatus('connected', 'Skeletal Map Initialized');
-            }, 
-            (xhr) => {},
-            (error) => {
-                console.error("Custom loader error", error);
-                alert("Failed to load 3D skeletal rig. Verify formatting. Only standard .glb or .gltf animations are supported.");
+                setStatus('connected', 'Skeletal Map Ready');
+            };
+
+            const errorCallback = (err) => {
+                console.error("Loader error", err);
+                alert("Failed to load 3D skeletal rig. Only .glb, .gltf, .fbx with standard skeleton supported.");
                 loadDefaultMannequin();
-            });
+            };
+
+            if (isFBX) {
+                loader.load(url, loadCallback, undefined, errorCallback);
+            } else {
+                loader.load(url, loadCallback, undefined, errorCallback);
+            }
         }
 
-        // Precompute the directions of bones in standard rest pose space
+        // Precompute bone rest directions
         function cacheRestDirections() {
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 let childNode = resolvedBones[link.child];
-
-                // Dynamic child scanning fallback
                 if (!childNode && boneNode) {
                     childNode = boneNode.children.find(c => c.isBone);
                 }
-
                 if (boneNode && childNode) {
-                    // Extract exact unit vector pointing to child in rest coordinate frame
                     link.defaultLocalDir = childNode.position.clone().normalize();
                 } else {
-                    // Fallbacks for end bones
                     if (link.bone.includes('Arm') || link.bone.includes('ForeArm')) {
                         link.defaultLocalDir = new THREE.Vector3(link.bone.includes('Left') ? 1 : -1, 0, 0);
                     } else if (link.bone.includes('Leg')) {
@@ -575,50 +577,41 @@
         }
 
         // ==========================================
-        // REAL-TIME RETARGETING MATRICES MATH
+        // REAL-TIME RETARGETING
         // ==========================================
         function onPoseAnalysis(results) {
             if (!results.poseWorldLandmarks) return;
-
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
             const minVisibility = 0.5;
 
-            // 1. Gather raw landmark coordinates
             for (const [name, idx] of Object.entries(jointIndices)) {
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
                         -lm.x, 
-                        -lm.y + 0.95, // Offset elevation to stand naturally over ground matrix
+                        -lm.y + 0.95,
                         -lm.z
                     );
                 }
             }
 
-            // Synthesize core spine landmarks
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
             }
             if (jointCoords.leftHip && jointCoords.rightHip) {
                 jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
             }
-
-            // Dummy ankle values for legs mapping fallbacks
             if (jointCoords.leftAnkle) jointCoords.leftFoot = jointCoords.leftAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
             if (jointCoords.rightAnkle) jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
 
-            // 2. Perform Absolute-to-Local skeletal rotation transfers
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
                 const endPos = jointCoords[link.endJoint];
 
                 if (boneNode && startPos && endPos && link.defaultLocalDir) {
-                    // Extract absolute vector direction in 3D capture space
                     const targetDirWorld = new THREE.Vector3().subVectors(endPos, startPos).normalize();
-
-                    // Project the world direction into the coordinate frame of the parent bone
                     const targetDirLocal = targetDirWorld.clone();
                     if (boneNode.parent) {
                         const parentWorldQuatInverse = new THREE.Quaternion();
@@ -626,29 +619,21 @@
                         parentWorldQuatInverse.invert();
                         targetDirLocal.applyQuaternion(parentWorldQuatInverse);
                     }
-
-                    // Compute clean quaternion to rotate default rest alignment into measured alignment
                     const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
-
-                    // Interpolate smoothly (slerp) to prevent video noise/shaking
                     boneNode.quaternion.slerp(rotationQuaternion, 0.25);
                 }
             });
 
-            // 3. Compute vertical translations (Squats/Jumps)
             if (resolvedBones.Hips && jointCoords.spineBottom) {
-                // Apply scaled vertical translation based on normalized spine offset
                 const targetY = jointCoords.spineBottom.y;
                 resolvedBones.Hips.position.y = THREE.MathUtils.lerp(resolvedBones.Hips.position.y, targetY, 0.2);
-                
-                // Mirror lateral and depth translations
                 resolvedBones.Hips.position.x = THREE.MathUtils.lerp(resolvedBones.Hips.position.x, jointCoords.spineBottom.x, 0.2);
                 resolvedBones.Hips.position.z = THREE.MathUtils.lerp(resolvedBones.Hips.position.z, jointCoords.spineBottom.z, 0.2);
             }
         }
 
         // ==========================================
-        // MAIN CLOCK RENDERING LOOP
+        // RENDER LOOP
         // ==========================================
         function animate() {
             requestAnimationFrame(animate);
@@ -659,7 +644,7 @@
         }
 
         // ==========================================
-        // SYSTEM TEARDOWN
+        // TEARDOWN
         // ==========================================
         function resetApp() {
             if (localStream) {
@@ -674,7 +659,6 @@
                 peer.destroy();
                 peer = null;
             }
-
             processingLoopActive = false;
             setStatus('offline', 'Offline');
 
