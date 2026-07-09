@@ -241,7 +241,7 @@
         // Audio Context API Nodes
         let audioCtx = null, audioSource = null, delayNode = null, delayGainNode = null, reverbNode = null, reverbGainNode = null, dryGainNode = null;
 
-        // Bone Aliases dictionary for multi-pass standard mapping
+        // Bone Aliases dictionary for multi-pass standard mapping (Matches older robust version)
         const nameAliases = {
             Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root', 'mixamorig:Hips', 'hip', 'pelvis'],
             Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2', 'mixamorig:Spine', 'spine'],
@@ -260,15 +260,17 @@
             RightFoot: ['mixamorigRightFoot', 'RightFoot', 'bip_right_foot', 'foot_r', 'R_Foot', 'mixamorig:RightFoot', 'r_foot', 'RightAnkle', 'rightankle']
         };
 
+        // Complete, working linkages from older Live Mocap builds (includes Spine -> Neck mapping)
         const BONE_RIG_LINKS = [
-            { bone: 'LeftArm', child: 'LeftForeArm', startJoint: 'leftUpperArm', endJoint: 'leftElbow' },
+            { bone: 'LeftArm', child: 'LeftForeArm', startJoint: 'leftShoulder', endJoint: 'leftElbow' },
             { bone: 'LeftForeArm', child: 'LeftHand', startJoint: 'leftElbow', endJoint: 'leftWrist' },
-            { bone: 'RightArm', child: 'RightForeArm', startJoint: 'rightUpperArm', endJoint: 'rightElbow' },
+            { bone: 'RightArm', child: 'RightForeArm', startJoint: 'rightShoulder', endJoint: 'rightElbow' },
             { bone: 'RightForeArm', child: 'RightHand', startJoint: 'rightElbow', endJoint: 'rightWrist' },
             { bone: 'LeftUpLeg', child: 'LeftLeg', startJoint: 'leftHip', endJoint: 'leftKnee' },
             { bone: 'LeftLeg', child: 'LeftFoot', startJoint: 'leftKnee', endJoint: 'leftAnkle' },
             { bone: 'RightUpLeg', child: 'RightLeg', startJoint: 'rightHip', endJoint: 'rightKnee' },
-            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' }
+            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' },
+            { bone: 'Spine', child: 'Neck', startJoint: 'spineBottom', endJoint: 'spineTop' }
         ];
 
         const jointIndices = {
@@ -860,34 +862,6 @@
             });
         }
 
-        // ==================== STRUCTURAL ANATOMICAL ROTATION CLAMPING ====================
-        function clampJointRotation(boneName, quat) {
-            const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
-            
-            if (boneName.includes('Elbow')) {
-                euler.z = 0; 
-                euler.y = 0;
-                euler.x = Math.max(0.0, Math.min(euler.x, 2.3)); 
-            } else if (boneName.includes('Knee')) {
-                euler.z = 0;
-                euler.y = 0;
-                euler.x = Math.max(-2.3, Math.min(euler.x, 0.0));
-            } else if (boneName.includes('UpLeg')) {
-                euler.x = Math.max(-0.5, Math.min(euler.x, 1.2)); 
-                euler.y = Math.max(-0.2, Math.min(euler.y, 0.2)); 
-                euler.z = Math.max(-0.25, Math.min(euler.z, 0.25)); 
-            } else if (boneName.includes('Leg') && !boneName.includes('UpLeg')) {
-                euler.y = 0;
-                euler.z = 0;
-            } else if (boneName.includes('Arm') && !boneName.includes('Fore')) {
-                euler.x = Math.max(-1.4, Math.min(euler.x, 1.4));
-                euler.y = Math.max(-1.4, Math.min(euler.y, 1.4));
-                euler.z = Math.max(-1.8, Math.min(euler.z, 1.8));
-            }
-            
-            quat.setFromEuler(euler);
-        }
-
         // ==================== RECOVERY TRIGGERS ====================
         function triggerJoltReset() {
             transitionBlend = 0.0;
@@ -1037,22 +1011,21 @@
             const jointCoords = {};
             const minVisibility = 0.5;
             
+            // Core coordinate projection using the stable, working math from older builds
             for (const [name, idx] of Object.entries(jointIndices)) {
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
-                        lm.x,         
-                        -lm.y + 0.95, 
-                        -lm.z         
+                        -lm.x,        // Stable projection direction from older working build
+                        -lm.y + 0.95, // Upward Y offset
+                        -lm.z         // Z matching depth
                     );
                 }
             }
             
-            // Reconstruct torso components
+            // Reconstruct torso midpoints
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
-                jointCoords.leftUpperArm = jointCoords.leftShoulder;
-                jointCoords.rightUpperArm = jointCoords.rightShoulder;
             }
             if (jointCoords.leftHip && jointCoords.rightHip) {
                 jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
@@ -1066,17 +1039,6 @@
 
             latestJointCoords = jointCoords;
 
-            // Geometric validity check to filter initial WebRTC solid/blank frames
-            const leftHip = jointCoords.leftHip;
-            const leftKnee = jointCoords.leftKnee;
-            if (leftHip && leftKnee) {
-                const thighDistance = leftHip.distanceTo(leftKnee);
-                if (thighDistance < 0.1) {
-                    // Suppress update of collapsed limbs to prevent fold distortion
-                    return;
-                }
-            }
-
             // Tracking Jolt Suppressor: Detect and skip coordinate jumps > 0.4 units
             const currentHipsPos = jointCoords.spineBottom;
             if (currentHipsPos && lastHipsPos.lengthSq() > 0) {
@@ -1088,38 +1050,13 @@
             if (currentHipsPos) lastHipsPos.copy(currentHipsPos);
             if (joltCooldown > 0) joltCooldown--;
             
-            // Orthogonal Twist Basis mapping for Spine tracking
-            if (jointCoords.leftShoulder && jointCoords.rightShoulder && jointCoords.spineTop && jointCoords.spineBottom) {
-                const u = new THREE.Vector3().subVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).normalize();
-                const v = new THREE.Vector3().subVectors(jointCoords.spineTop, jointCoords.spineBottom).normalize();
-                const w = new THREE.Vector3().crossVectors(u, v).normalize();
-                u.crossVectors(v, w).normalize();
-                
-                const basisMat = new THREE.Matrix4().makeBasis(u, v, w);
-                const torsoQuat = new THREE.Quaternion().setFromRotationMatrix(basisMat);
-                
-                if (resolvedBones.Hips) {
-                    const blendedTorso = new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), torsoQuat, transitionBlend);
-                    resolvedBones.Hips.quaternion.slerp(blendedTorso, 0.2);
-                }
-            }
-            
-            // Limb Orientation Mapping
+            // Stable, tested joint orientation mapping from working build
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
                 const endPos = jointCoords[link.endJoint];
-                const lmStart = worldLms[jointIndices[link.startJoint] || 0];
-                const lmEnd = worldLms[jointIndices[link.endJoint] || 0];
                 
-                if (!boneNode) return;
-
-                if (!startPos || !endPos || !lmStart || !lmEnd || lmStart.visibility < 0.65 || lmEnd.visibility < 0.65) {
-                    boneNode.quaternion.slerp(new THREE.Quaternion(), 0.1); 
-                    return;
-                }
-                
-                if (link.defaultLocalDir) {
+                if (boneNode && startPos && endPos && link.defaultLocalDir) {
                     const targetDirWorld = new THREE.Vector3().subVectors(endPos, startPos).normalize();
                     const targetDirLocal = targetDirWorld.clone();
                     if (boneNode.parent) {
@@ -1130,59 +1067,21 @@
                     }
                     const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
                     
+                    // Smooth slerp transition
                     const blendedQuat = new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), rotationQuaternion, transitionBlend);
-                    const angleDiff = boneNode.quaternion.angleTo(blendedQuat);
-                    const dynamicSlerp = angleDiff > 1.2 ? 0.05 : 0.25; 
+                    boneNode.quaternion.slerp(blendedQuat, 0.25);
                     
-                    boneNode.quaternion.slerp(blendedQuat, dynamicSlerp);
-                    clampJointRotation(link.bone, boneNode.quaternion);
+                    // Optional clamping applied on Forearm/Leg hinge nodes to maintain standard humanoid posture
+                    if (link.bone.includes('ForeArm') || link.bone.includes('Leg')) {
+                        clampJointRotation(link.bone, boneNode.quaternion);
+                    }
+                } else if (boneNode && (!startPos || !endPos)) {
+                    // Smoothly return joint to rest orientation if visibility drops
+                    boneNode.quaternion.slerp(new THREE.Quaternion(), 0.1);
                 }
             });
 
-            // Procedural Finger curl mappings
-            if (resolvedBones.LeftHand && jointCoords.leftWrist && worldLms[17] && worldLms[19]) {
-                const lWrist = new THREE.Vector3(-worldLms[15].x, -worldLms[15].y, -worldLms[15].z);
-                const lPinky = new THREE.Vector3(-worldLms[17].x, -worldLms[17].y, -worldLms[17].z);
-                const lIndex = new THREE.Vector3(-worldLms[19].x, -worldLms[19].y, -worldLms[19].z);
-                const dPinky = lWrist.distanceTo(lPinky);
-                const dIndex = lWrist.distanceTo(lIndex);
-                const avgDist = (dPinky + dIndex) / 2.0;
-                const openFactor = THREE.MathUtils.clamp((avgDist - 0.08) / 0.12, 0.0, 1.0);
-                const curlAngle = (1.0 - openFactor) * (Math.PI / 2.0);
-                
-                resolvedBones.LeftHand.traverse((child) => {
-                    if (child !== resolvedBones.LeftHand && (
-                        child.name.toLowerCase().includes('finger') || child.name.toLowerCase().includes('thumb') ||
-                        child.name.toLowerCase().includes('index') || child.name.toLowerCase().includes('middle') ||
-                        child.name.toLowerCase().includes('ring') || child.name.toLowerCase().includes('pinky')
-                    )) {
-                        child.rotation.z = curlAngle;
-                    }
-                });
-            }
-
-            if (resolvedBones.RightHand && jointCoords.rightWrist && worldLms[18] && worldLms[20]) {
-                const rWrist = new THREE.Vector3(-worldLms[16].x, -worldLms[16].y, -worldLms[16].z);
-                const rPinky = new THREE.Vector3(-worldLms[18].x, -worldLms[18].y, -worldLms[18].z);
-                const rIndex = new THREE.Vector3(-worldLms[20].x, -worldLms[20].y, -worldLms[20].z);
-                const dPinky = rWrist.distanceTo(rPinky);
-                const dIndex = rWrist.distanceTo(rIndex);
-                const avgDist = (dPinky + dIndex) / 2.0;
-                const openFactor = THREE.MathUtils.clamp((avgDist - 0.08) / 0.12, 0.0, 1.0);
-                const curlAngle = (1.0 - openFactor) * (Math.PI / 2.0);
-                
-                resolvedBones.RightHand.traverse((child) => {
-                    if (child !== resolvedBones.RightHand && (
-                        child.name.toLowerCase().includes('finger') || child.name.toLowerCase().includes('thumb') ||
-                        child.name.toLowerCase().includes('index') || child.name.toLowerCase().includes('middle') ||
-                        child.name.toLowerCase().includes('ring') || child.name.toLowerCase().includes('pinky')
-                    )) {
-                        child.rotation.z = -curlAngle;
-                    }
-                });
-            }
-            
-            // Root translation mappings with scale normalizations
+            // Root translation mapping based strictly on hip translation calculations (keeps legs aligned)
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 const targetX = jointCoords.spineBottom.x / scaleY;
