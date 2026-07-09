@@ -130,6 +130,17 @@
                         <span>Wireframe Mode</span>
                         <input id="toggle-wireframe" type="checkbox" class="w-4 h-4 accent-teal-500" onchange="toggleWireframe()">
                     </div>
+                    <div class="flex justify-between items-center text-xs text-slate-400">
+                        <span>Chroma Key Filter</span>
+                        <input id="toggle-chroma" type="checkbox" class="w-4 h-4 accent-teal-500" checked>
+                    </div>
+                    <div class="flex justify-between items-center text-xs text-slate-400">
+                        <span>Camera Aspect</span>
+                        <select id="camera-aspect" class="bg-slate-950 border border-slate-800 p-1 rounded text-slate-300 text-[11px] focus:outline-none" onchange="updateCameraAspect()">
+                            <option value="horizontal">Horizontal (16:9)</option>
+                            <option value="vertical">Vertical (9:16)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -242,8 +253,8 @@
                 </div>
             </div>
             
-            <!-- Video PIP Frame with Chroma Key Overlay -->
-            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-44 h-32 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
+            <!-- Video PIP Frame with Dynamic Aspect Orientation -->
+            <div id="pip-container" class="absolute bottom-4 right-4 w-56 h-36 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20 transition-all">
                 <video id="remote-video" autoplay playsinline muted class="hidden"></video>
                 <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
                 <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">🎥 Video Feed</div>
@@ -843,7 +854,7 @@
             document.getElementById('fps-val').innerText = metrics.fps;
             document.getElementById('latency-val').innerText = activeCall ? "Low (RTC)" : "--";
 
-            // Process green screen / background mask subtraction
+            // Process PIP visual stream (respecting chroma-key toggle)
             renderChromaPIP(results);
 
             if (!results.poseWorldLandmarks) return;
@@ -892,7 +903,7 @@
             // Scale factor integration
             const scale = calibrationData.calibrated ? calibrationData.scaleFactor : 1.0;
 
-            // 1. Head Rotation Solver (Yaw, Pitch, Roll)
+            // 1. Head Rotation Solver (Yaw, Pitch, Roll) with flip safeguards & clamps
             if (resolvedBones.Head && jointCoords.nose && jointCoords.leftEye && jointCoords.rightEye) {
                 const headEuler = estimateHeadOrientation(jointCoords);
                 resolvedBones.Head.quaternion.slerp(new THREE.Quaternion().setFromEuler(headEuler), 0.25);
@@ -945,19 +956,45 @@
             if (document.getElementById('toggle-ik').checked) {
                 applyFootLocking(jointCoords, scale);
             }
+
+            // 6. Dynamic Floor Grounding (Stabilizer to prevent sinking/floating)
+            if (loadedModel) {
+                let lowestFootY = 0;
+                const leftFootWorld = new THREE.Vector3();
+                const rightFootWorld = new THREE.Vector3();
+                
+                if (resolvedBones.LeftFoot) {
+                    resolvedBones.LeftFoot.getWorldPosition(leftFootWorld);
+                    lowestFootY = leftFootWorld.y;
+                }
+                if (resolvedBones.RightFoot) {
+                    resolvedBones.RightFoot.getWorldPosition(rightFootWorld);
+                    if (rightFootWorld.y < lowestFootY) {
+                        lowestFootY = rightFootWorld.y;
+                    }
+                }
+                
+                // Dynamically offset the entire model root upwards/downwards to snap the lowest foot exactly to the floor grid (Y = 0)
+                loadedModel.position.y -= lowestFootY;
+            }
         }
 
         function estimateHeadOrientation(joints) {
-            const dx = joints.rightEye.x - joints.leftEye.x;
-            const dy = joints.rightEye.y - joints.leftEye.y;
-            const roll = Math.atan2(dy, dx);
+            // Using Left-Eye to Right-Eye direction to avoid 180-degree flip in mirrored space
+            const dx = joints.leftEye.x - joints.rightEye.x;
+            const dy = joints.leftEye.y - joints.rightEye.y;
+            
+            let roll = Math.atan2(dy, dx);
+            roll = THREE.MathUtils.clamp(roll, -0.6, 0.6); // Clamp to realistic neck limits
             
             const distL = joints.nose.distanceTo(joints.leftEye);
             const distR = joints.nose.distanceTo(joints.rightEye);
-            const yaw = (distL - distR) / (distL + distR + 1e-5) * 1.5;
+            let yaw = (distL - distR) / (distL + distR + 1e-5) * 1.8;
+            yaw = THREE.MathUtils.clamp(yaw, -1.0, 1.0);
             
             const eyeMidY = (joints.leftEye.y + joints.rightEye.y) * 0.5;
-            const pitch = (joints.nose.y - eyeMidY) * 2.0;
+            let pitch = (joints.nose.y - eyeMidY) * 2.0;
+            pitch = THREE.MathUtils.clamp(pitch, -0.8, 0.8);
 
             return new THREE.Euler(pitch, yaw, roll, 'YXZ');
         }
@@ -968,7 +1005,7 @@
             if (joints.leftAnkle && resolvedBones.LeftUpLeg && resolvedBones.LeftLeg && resolvedBones.LeftFoot) {
                 const lAnklePos = joints.leftAnkle.clone().multiplyScalar(scale);
                 if (lAnklePos.y < floorThreshold) {
-                    lAnklePos.y = 0; // Snap to ground plane
+                    lAnklePos.y = 0; // Snap to floor
                     const solver = new FABRIKSolver(
                         [resolvedBones.LeftUpLeg, resolvedBones.LeftLeg, resolvedBones.LeftFoot], 
                         lAnklePos
@@ -993,7 +1030,7 @@
         // ==================== CHROMA KEY GREEN SCREEN RENDERER ====================
         function renderChromaPIP(results) {
             const canvas = document.getElementById('pip-canvas');
-            if (!canvas || !results.segmentationMask || !results.image) return;
+            if (!canvas || !results.image) return;
 
             if (canvas.width !== results.image.width) {
                 canvas.width = results.image.width;
@@ -1004,16 +1041,35 @@
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Crop to visible segmentation mask
-            ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
-            ctx.globalCompositeOperation = 'source-in';
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            const chromaEnabled = document.getElementById('toggle-chroma').checked;
             
-            // Draw Virtual Chroma green color behind user
-            ctx.globalCompositeOperation = 'destination-over';
-            ctx.fillStyle = '#00FF00';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (chromaEnabled && results.segmentationMask) {
+                // Crop to visible segmentation mask
+                ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+                
+                // Draw Virtual Chroma green color behind user
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = '#00FF00';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                // Draw full camera feed
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            }
+            
             ctx.restore();
+        }
+
+        // ==================== ASPECT ORIENTATION UPDATE ====================
+        function updateCameraAspect() {
+            const aspect = document.getElementById('camera-aspect').value;
+            const container = document.getElementById('pip-container');
+            if (aspect === 'horizontal') {
+                container.className = "absolute bottom-4 right-4 w-56 h-36 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20 transition-all";
+            } else {
+                container.className = "absolute bottom-4 right-4 w-32 h-56 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20 transition-all";
+            }
         }
 
         // ==================== RENDERING LOOP ====================
@@ -1138,6 +1194,7 @@
         window.resetApp = resetApp;
         window.handleModelFile = handleModelFile;
         window.triggerCalibration = triggerCalibration;
+        window.updateCameraAspect = updateCameraAspect;
     </script>
 </body>
 </html>
