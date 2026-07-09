@@ -1,3 +1,5 @@
+--- START OF FILE Paste July 09, 2026 - 7:38PM ---
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,6 +32,7 @@
         video { transform: scaleX(-1); }
         #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
+        #pip-canvas { transform: scaleX(-1); } /* Mirror reflection for intuitive user feedback */
         @media (max-width: 640px) {
             #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
             #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
@@ -148,10 +151,11 @@
                 </div>
             </div>
             
-            <!-- Video PiP -->
+            <!-- Video PiP with Chroma Key Background Masking -->
             <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
-                <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Phone Feed</div>
+                <video id="remote-video" autoplay playsinline muted class="hidden"></video>
+                <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Chroma Feed</div>
             </div>
         </div>
     </main>
@@ -311,6 +315,7 @@
             poseDetector.setOptions({
                 modelComplexity: 1,
                 smoothLandmarks: true,
+                enableSegmentation: true, // Enables the alpha segmentation mask for background removal
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
@@ -325,7 +330,7 @@
             async function processFrame() {
                 if (!processingLoopActive) return;
                 const now = Date.now();
-                if (now - lastProcessed > 45) { // Capped at ~22 FPS targeting performance optimization
+                if (now - lastProcessed > 40) { // Targeting smooth ~25 FPS mapping performance
                     if (videoElement.readyState >= 2) {
                         try {
                             await poseDetector.send({ image: videoElement });
@@ -534,14 +539,17 @@
                 loadedModel = model;
                 scene.add(loadedModel);
                 
-                // Auto-scale to baseline ~1.7m
+                // Automatic scale calculations to exactly match baseline procedural mannequin's height (~1.65 meters)
                 const box = new THREE.Box3().setFromObject(loadedModel);
                 const size = box.getSize(new THREE.Vector3());
                 const currentHeight = size.y;
-                if (currentHeight > 0.01 && currentHeight < 10) {
-                    const scaleFactor = 1.7 / currentHeight;
+                if (currentHeight > 0.001) {
+                    const targetHeight = 1.65;
+                    const scaleFactor = targetHeight / currentHeight;
                     loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
                 }
+                
+                // Keep the model root origin pinned at standard baseline ground coords
                 loadedModel.position.set(0, 0, 0);
                 
                 // Enhanced bone mapping traverse passes
@@ -623,11 +631,11 @@
                     const fbxLoader = new THREE.FBXLoader();
                     fbxLoader.load(url, loadCallback, undefined, (fbxErr) => {
                         console.error("Backup FBX loader call failed:", fbxErr);
-                        alert("Could not parser the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
+                        alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
                         loadDefaultMannequin();
                     });
                 } else {
-                    alert("Could not parser the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
+                    alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
                     loadDefaultMannequin();
                 }
 
@@ -670,6 +678,32 @@
 
         // ==================== POSE PROCESSING ====================
         function onPoseAnalysis(results) {
+            // Background subtraction green-screen implementation
+            const canvasEl = document.getElementById('pip-canvas');
+            if (canvasEl && results.segmentationMask && results.image) {
+                if (canvasEl.width !== results.image.width || canvasEl.height !== results.image.height) {
+                    canvasEl.width = results.image.width;
+                    canvasEl.height = results.image.height;
+                }
+                const canvasCtx = canvasEl.getContext('2d');
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+                
+                // 1. Draw segmentation mask overlay
+                canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasEl.width, canvasEl.height);
+                
+                // 2. Crop to background-subtracted foreground via source-in blending
+                canvasCtx.globalCompositeOperation = 'source-in';
+                canvasCtx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+                
+                // 3. Render bright chroma green background behind subject
+                canvasCtx.globalCompositeOperation = 'destination-over';
+                canvasCtx.fillStyle = '#00FF00'; // Standard Green Screen Chroma
+                canvasCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+                
+                canvasCtx.restore();
+            }
+
             if (!results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
@@ -679,9 +713,9 @@
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
-                        -lm.x,
-                        -lm.y + 0.95,
-                        -lm.z
+                        lm.x,         // Corrected: Removed negative to fix mirrored/inward rotation flips
+                        -lm.y + 0.95, // Keep standard upward-pointing Y axis
+                        -lm.z         // Depth value
                     );
                 }
             }
