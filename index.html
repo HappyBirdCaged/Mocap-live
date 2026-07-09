@@ -1,5 +1,3 @@
---- START OF FILE Paste July 09, 2026 - 7:38PM ---
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -32,7 +30,7 @@
         video { transform: scaleX(-1); }
         #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
-        #pip-canvas { transform: scaleX(-1); } /* Mirror reflection for intuitive user feedback */
+        #pip-canvas { transform: scaleX(-1); } /* Mirrored reflection for intuitive user feedback */
         @media (max-width: 640px) {
             #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
             #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
@@ -80,7 +78,7 @@
                     </div>
                     <button onclick="startAsCamera()" class="w-full p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-semibold transition-all duration-200">
                         📱 Phone Camera Source
-                        <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency camera data to PC</span>
+                        <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency camera & microphone data</span>
                     </button>
                 </div>
             </div>
@@ -155,7 +153,7 @@
             <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
                 <video id="remote-video" autoplay playsinline muted class="hidden"></video>
                 <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
-                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Chroma Feed</div>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Hologram scan</div>
             </div>
         </div>
     </main>
@@ -175,6 +173,10 @@
         let loadedModel = null;
         let resolvedBones = {};
         let animationFrameId = null;
+
+        // Audio API Contexts
+        let audioCtx = null;
+        let audioSource = null;
 
         const setupView = document.getElementById('setup-view');
         const phoneView = document.getElementById('phone-view');
@@ -244,11 +246,15 @@
                 alert("Please enter the 5-digit code shown on the display PC.");
                 return;
             }
-            setStatus('loading', 'Accessing Camera...');
+            setStatus('loading', 'Accessing Stream...');
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
-                    audio: false
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 document.getElementById('local-video').srcObject = localStream;
                 document.getElementById('phone-input-container').classList.add('hidden');
@@ -265,8 +271,93 @@
                 setStatus('connected', 'Live Streaming');
             } catch (err) {
                 console.error(err);
-                alert("Camera access failed. Ensure this is served via HTTPS or localhost.");
-                setStatus('offline', 'Camera Blocked');
+                alert("Camera/Audio access failed. Ensure connection is served via HTTPS or localhost.");
+                setStatus('offline', 'Source Blocked');
+            }
+        }
+
+        // ==================== AUDIO DSP PIPELINE ====================
+        function createArenaReverbBuffer(audioCtx, duration = 3.5, decay = 2.8) {
+            const sampleRate = audioCtx.sampleRate;
+            const len = sampleRate * duration;
+            const buffer = audioCtx.createBuffer(2, len, sampleRate);
+            
+            for (let channel = 0; channel < 2; channel++) {
+                const data = buffer.getChannelData(channel);
+                for (let i = 0; i < len; i++) {
+                    const percent = i / len;
+                    const envelope = Math.pow(1 - percent, decay);
+                    data[i] = (Math.random() * 2 - 1) * envelope;
+                }
+            }
+            return buffer;
+        }
+
+        function setupAudioDSP(stream) {
+            if (stream.getAudioTracks().length === 0) return;
+            
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                audioSource = audioCtx.createMediaStreamSource(stream);
+                
+                // 1. Human Voice Bandpass Filter (keeps 85Hz to 3500Hz, attenuating high/low noises)
+                const hpFilter = audioCtx.createBiquadFilter();
+                hpFilter.type = "highpass";
+                hpFilter.frequency.value = 85; 
+                
+                const lpFilter = audioCtx.createBiquadFilter();
+                lpFilter.type = "lowpass";
+                lpFilter.frequency.value = 3500; 
+                
+                // 2. Dynamics Gate (Suppresses room noise below quiet threshold)
+                const gate = audioCtx.createDynamicsCompressor();
+                gate.threshold.value = -35; 
+                gate.knee.value = 10;
+                gate.ratio.value = 12;
+                gate.attack.value = 0.01;
+                gate.release.value = 0.25;
+
+                // 3. Concert Echo Node (Slapback feedback)
+                const delay = audioCtx.createDelay(1.0);
+                delay.delayTime.value = 0.35; 
+                
+                const delayGain = audioCtx.createGain();
+                delayGain.gain.value = 0.3; 
+                
+                delay.connect(delayGain);
+                delayGain.connect(delay);
+                
+                // 4. Stadium Reverb convolver
+                const convolver = audioCtx.createConvolver();
+                convolver.buffer = createArenaReverbBuffer(audioCtx, 3.5, 3.0);
+                
+                const reverbGain = audioCtx.createGain();
+                reverbGain.gain.value = 0.45; 
+
+                const dryGain = audioCtx.createGain();
+                dryGain.gain.value = 0.7; 
+
+                // Connect routing pipeline
+                audioSource.connect(hpFilter);
+                hpFilter.connect(lpFilter);
+                lpFilter.connect(gate);
+                
+                // Direct vs Wet outputs
+                gate.connect(dryGain);
+                gate.connect(delay);
+                gate.connect(convolver);
+                
+                convolver.connect(reverbGain);
+                
+                // Output routing
+                dryGain.connect(audioCtx.destination);
+                delayGain.connect(audioCtx.destination);
+                reverbGain.connect(audioCtx.destination);
+            } catch (err) {
+                console.error("Audio DSP init failed: ", err);
             }
         }
 
@@ -297,8 +388,12 @@
                     videoEl.srcObject = remoteStream;
                     videoEl.onloadedmetadata = () => {
                         videoEl.play();
+                        
+                        // Initialize custom voice DSP chain
+                        setupAudioDSP(remoteStream);
+                        
                         startFrameProcessing();
-                        setStatus('connected', 'Mocap Active');
+                        setStatus('connected', 'Mocap & DSP Active');
                     };
                 });
                 call.on('close', () => {
@@ -315,7 +410,7 @@
             poseDetector.setOptions({
                 modelComplexity: 1,
                 smoothLandmarks: true,
-                enableSegmentation: true, // Enables the alpha segmentation mask for background removal
+                enableSegmentation: true, // Enables background subtraction mask
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
@@ -330,7 +425,7 @@
             async function processFrame() {
                 if (!processingLoopActive) return;
                 const now = Date.now();
-                if (now - lastProcessed > 40) { // Targeting smooth ~25 FPS mapping performance
+                if (now - lastProcessed > 40) { 
                     if (videoElement.readyState >= 2) {
                         try {
                             await poseDetector.send({ image: videoElement });
@@ -363,15 +458,14 @@
         };
 
         const BONE_RIG_LINKS = [
-            { bone: 'LeftArm', child: 'LeftForeArm', startJoint: 'leftShoulder', endJoint: 'leftElbow' },
+            { bone: 'LeftArm', child: 'LeftForeArm', startJoint: 'leftUpperArm', endJoint: 'leftElbow' },
             { bone: 'LeftForeArm', child: 'LeftHand', startJoint: 'leftElbow', endJoint: 'leftWrist' },
-            { bone: 'RightArm', child: 'RightForeArm', startJoint: 'rightShoulder', endJoint: 'rightElbow' },
+            { bone: 'RightArm', child: 'RightForeArm', startJoint: 'rightUpperArm', endJoint: 'rightElbow' },
             { bone: 'RightForeArm', child: 'RightHand', startJoint: 'rightElbow', endJoint: 'rightWrist' },
             { bone: 'LeftUpLeg', child: 'LeftLeg', startJoint: 'leftHip', endJoint: 'leftKnee' },
             { bone: 'LeftLeg', child: 'LeftFoot', startJoint: 'leftKnee', endJoint: 'leftAnkle' },
             { bone: 'RightUpLeg', child: 'RightLeg', startJoint: 'rightHip', endJoint: 'rightKnee' },
-            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' },
-            { bone: 'Spine', child: 'Neck', startJoint: 'spineBottom', endJoint: 'spineTop' }
+            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' }
         ];
 
         const jointIndices = {
@@ -662,7 +756,6 @@
                         link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
                     }
                 } else {
-                    // Positional guesses based on structural standard orientations
                     if (link.bone.includes('Left') || link.bone.includes('left')) {
                         link.defaultLocalDir = new THREE.Vector3(1, 0, 0);
                     } else if (link.bone.includes('Right') || link.bone.includes('right')) {
@@ -676,32 +769,108 @@
             });
         }
 
+        // ==================== 3D SCANNER NORMAL MAP FILTER ====================
+        function applyPseudoNormalMap(maskCanvas, imageCanvas, targetCanvas) {
+            const ctx = targetCanvas.getContext('2d');
+            const w = targetCanvas.width;
+            const h = targetCanvas.height;
+            
+            ctx.drawImage(imageCanvas, 0, 0, w, h);
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const imgPix = imgData.data;
+            
+            const maskCtx = maskCanvas.getContext('2d');
+            const maskData = maskCtx.getImageData(0, 0, w, h);
+            const maskPix = maskData.data;
+            
+            const output = ctx.createImageData(w, h);
+            const outPix = output.data;
+            
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    const idx = (y * w + x) * 4;
+                    const a = maskPix[idx + 3]; 
+                    
+                    if (a < 35) {
+                        // Background: Sci-Fi Tech Dark Blue
+                        outPix[idx] = 11;
+                        outPix[idx + 1] = 15;
+                        outPix[idx + 2] = 26;
+                        outPix[idx + 3] = 255;
+                        continue;
+                    }
+                    
+                    // Spatial Sobel operator over alpha mask boundaries
+                    const a_l = maskPix[idx - 4 + 3];
+                    const a_r = maskPix[idx + 4 + 3];
+                    const a_u = maskPix[((y - 1) * w + x) * 4 + 3];
+                    const a_d = maskPix[((y + 1) * w + x) * 4 + 3];
+                    
+                    const dx = (a_r - a_l) / 255.0;
+                    const dy = (a_d - a_u) / 255.0;
+                    
+                    const nx = dx * 0.5 + 0.5;
+                    const ny = dy * 0.5 + 0.5;
+                    const nz = 1.0 - Math.min(1.0, Math.sqrt(dx*dx + dy*dy));
+                    
+                    // Merged Cyberpunk hologram style
+                    outPix[idx] = Math.floor(nx * 128 + imgPix[idx] * 0.4);
+                    outPix[idx + 1] = Math.floor(ny * 220 + imgPix[idx + 1] * 0.1);
+                    outPix[idx + 2] = Math.floor(nz * 255 + imgPix[idx + 2] * 0.4);
+                    outPix[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(output, 0, 0);
+        }
+
+        // ==================== ANATOMICAL JOINT ROTATION LIMITS ====================
+        function clampJointRotation(boneName, quat) {
+            const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
+            
+            if (boneName.includes('Elbow')) {
+                // Elbow hinge joints (bend restriction)
+                euler.z = 0; 
+                euler.y = 0;
+                euler.x = Math.max(0.0, Math.min(euler.x, 2.3)); 
+            } else if (boneName.includes('Knee')) {
+                // Knee hinge joints (bends backward only)
+                euler.z = 0;
+                euler.y = 0;
+                euler.x = Math.max(-2.3, Math.min(euler.x, 0.0));
+            } else if (boneName.includes('UpLeg')) {
+                // Hip joint motion angles
+                euler.x = Math.max(-0.8, Math.min(euler.x, 1.3));
+                euler.y = Math.max(-0.4, Math.min(euler.y, 0.4));
+                euler.z = Math.max(-0.4, Math.min(euler.z, 0.4));
+            } else if (boneName.includes('Arm') && !boneName.includes('Fore')) {
+                // Shoulder joint spherical limits
+                euler.x = Math.max(-1.4, Math.min(euler.x, 1.4));
+                euler.y = Math.max(-1.4, Math.min(euler.y, 1.4));
+                euler.z = Math.max(-1.8, Math.min(euler.z, 1.8));
+            }
+            
+            quat.setFromEuler(euler);
+        }
+
         // ==================== POSE PROCESSING ====================
         function onPoseAnalysis(results) {
-            // Background subtraction green-screen implementation
+            // Background subtraction and normal map visualization
             const canvasEl = document.getElementById('pip-canvas');
             if (canvasEl && results.segmentationMask && results.image) {
-                if (canvasEl.width !== results.image.width || canvasEl.height !== results.image.height) {
-                    canvasEl.width = results.image.width;
-                    canvasEl.height = results.image.height;
+                const renderW = 160;
+                const renderH = 120;
+                if (canvasEl.width !== renderW || canvasEl.height !== renderH) {
+                    canvasEl.width = renderW;
+                    canvasEl.height = renderH;
                 }
-                const canvasCtx = canvasEl.getContext('2d');
-                canvasCtx.save();
-                canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
                 
-                // 1. Draw segmentation mask overlay
-                canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasEl.width, canvasEl.height);
+                const offscreen = document.createElement('canvas');
+                offscreen.width = renderW;
+                offscreen.height = renderH;
+                const oCtx = offscreen.getContext('2d');
+                oCtx.drawImage(results.segmentationMask, 0, 0, renderW, renderH);
                 
-                // 2. Crop to background-subtracted foreground via source-in blending
-                canvasCtx.globalCompositeOperation = 'source-in';
-                canvasCtx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
-                
-                // 3. Render bright chroma green background behind subject
-                canvasCtx.globalCompositeOperation = 'destination-over';
-                canvasCtx.fillStyle = '#00FF00'; // Standard Green Screen Chroma
-                canvasCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
-                
-                canvasCtx.restore();
+                applyPseudoNormalMap(offscreen, results.image, canvasEl);
             }
 
             if (!results.poseWorldLandmarks) return;
@@ -713,15 +882,19 @@
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
-                        lm.x,         // Corrected: Removed negative to fix mirrored/inward rotation flips
-                        -lm.y + 0.95, // Keep standard upward-pointing Y axis
-                        -lm.z         // Depth value
+                        lm.x,         // Corrected: Removed negation to resolve inverted limb behaviors
+                        -lm.y + 0.95, // Upward Y representation
+                        -lm.z         // Z-depth matching camera space
                     );
                 }
             }
             
+            // Reconstruct upper and lower spine midpoints
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
+                // Assign shoulder tracking vector points
+                jointCoords.leftUpperArm = jointCoords.leftShoulder;
+                jointCoords.rightUpperArm = jointCoords.rightShoulder;
             }
             if (jointCoords.leftHip && jointCoords.rightHip) {
                 jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
@@ -733,6 +906,23 @@
                 jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
             }
             
+            // 1. 360° Torso Twist tracking using orthogonal Basis Matrices
+            if (jointCoords.leftShoulder && jointCoords.rightShoulder && jointCoords.spineTop && jointCoords.spineBottom) {
+                const u = new THREE.Vector3().subVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).normalize(); // X direction
+                const v = new THREE.Vector3().subVectors(jointCoords.spineTop, jointCoords.spineBottom).normalize();    // Y direction
+                const w = new THREE.Vector3().crossVectors(u, v).normalize();                                           // Z direction (facing)
+                
+                u.crossVectors(v, w).normalize(); // Orthogonal basis verification
+                
+                const basisMat = new THREE.Matrix4().makeBasis(u, v, w);
+                const torsoQuat = new THREE.Quaternion().setFromRotationMatrix(basisMat);
+                
+                if (resolvedBones.Hips) {
+                    resolvedBones.Hips.quaternion.slerp(torsoQuat, 0.2);
+                }
+            }
+            
+            // 2. Limb calculation with rotational limits & anomaly damping
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
@@ -748,11 +938,67 @@
                         targetDirLocal.applyQuaternion(parentWorldQuatInverse);
                     }
                     const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
-                    boneNode.quaternion.slerp(rotationQuaternion, 0.25);
+                    
+                    // Tracking dampening: Adjust speed if joints exceed threshold
+                    const angleDiff = boneNode.quaternion.angleTo(rotationQuaternion);
+                    const dynamicSlerp = angleDiff > 1.2 ? 0.05 : 0.25; 
+                    
+                    boneNode.quaternion.slerp(rotationQuaternion, dynamicSlerp);
+                    
+                    // Clamp unnatural 360 degree rotational behaviors
+                    clampJointRotation(link.bone, boneNode.quaternion);
                 }
             });
+
+            // 3. Procedural Finger articulation (curls fingers if knuckles track close to wrist)
+            if (resolvedBones.LeftHand && jointCoords.leftWrist && worldLms[17] && worldLms[19]) {
+                const lWrist = new THREE.Vector3(-worldLms[15].x, -worldLms[15].y, -worldLms[15].z);
+                const lPinky = new THREE.Vector3(-worldLms[17].x, -worldLms[17].y, -worldLms[17].z);
+                const lIndex = new THREE.Vector3(-worldLms[19].x, -worldLms[19].y, -worldLms[19].z);
+                
+                const dPinky = lWrist.distanceTo(lPinky);
+                const dIndex = lWrist.distanceTo(lIndex);
+                const avgDist = (dPinky + dIndex) / 2.0;
+                
+                // Track finger posture: distance transitions between 0.08m (fist) and 0.20m (open palm)
+                const openFactor = THREE.MathUtils.clamp((avgDist - 0.08) / 0.12, 0.0, 1.0);
+                const curlAngle = (1.0 - openFactor) * (Math.PI / 2.0);
+                
+                resolvedBones.LeftHand.traverse((child) => {
+                    if (child !== resolvedBones.LeftHand && (
+                        child.name.toLowerCase().includes('finger') || child.name.toLowerCase().includes('thumb') ||
+                        child.name.toLowerCase().includes('index') || child.name.toLowerCase().includes('middle') ||
+                        child.name.toLowerCase().includes('ring') || child.name.toLowerCase().includes('pinky')
+                    )) {
+                        child.rotation.z = curlAngle;
+                    }
+                });
+            }
+
+            if (resolvedBones.RightHand && jointCoords.rightWrist && worldLms[18] && worldLms[20]) {
+                const rWrist = new THREE.Vector3(-worldLms[16].x, -worldLms[16].y, -worldLms[16].z);
+                const rPinky = new THREE.Vector3(-worldLms[18].x, -worldLms[18].y, -worldLms[18].z);
+                const rIndex = new THREE.Vector3(-worldLms[20].x, -worldLms[20].y, -worldLms[20].z);
+                
+                const dPinky = rWrist.distanceTo(rPinky);
+                const dIndex = rWrist.distanceTo(rIndex);
+                const avgDist = (dPinky + dIndex) / 2.0;
+                
+                const openFactor = THREE.MathUtils.clamp((avgDist - 0.08) / 0.12, 0.0, 1.0);
+                const curlAngle = (1.0 - openFactor) * (Math.PI / 2.0);
+                
+                resolvedBones.RightHand.traverse((child) => {
+                    if (child !== resolvedBones.RightHand && (
+                        child.name.toLowerCase().includes('finger') || child.name.toLowerCase().includes('thumb') ||
+                        child.name.toLowerCase().includes('index') || child.name.toLowerCase().includes('middle') ||
+                        child.name.toLowerCase().includes('ring') || child.name.toLowerCase().includes('pinky')
+                    )) {
+                        child.rotation.z = -curlAngle;
+                    }
+                });
+            }
             
-            // Scaled positioning calculations for root bone translating 
+            // Positioning calculations for root bone translation
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 const targetX = jointCoords.spineBottom.x / scaleY;
@@ -787,6 +1033,10 @@
             if (peer) {
                 peer.destroy();
                 peer = null;
+            }
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
             }
             
             disposeThreeJS();
