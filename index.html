@@ -114,7 +114,7 @@
             <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
             
             <!-- Floating Dashboard -->
-            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto">
+            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2">
                     <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard</h3>
                     <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
@@ -139,6 +139,70 @@
                         <div class="flex gap-2">
                             <input id="model-url" type="text" placeholder="Or enter GLB/FBX URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
                             <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Sound & Hard Reset Controls -->
+                <div class="border-t border-slate-800 pt-3 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rig Controls</span>
+                        <button onclick="hardResetPose()" class="bg-red-950/40 border border-red-700/60 text-red-300 hover:bg-red-800/40 text-[10px] px-2.5 py-1 rounded font-semibold transition">Hard Reset Pose</button>
+                    </div>
+                    
+                    <!-- Audio FX Control Panel -->
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2.5">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Live Concert DSP Filters</div>
+                        
+                        <!-- Echo Delay Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Echo Delay</span>
+                                <span id="echo-time-val" class="font-mono text-teal-400">0.35s</span>
+                            </div>
+                            <input id="echo-time-slider" type="range" min="0.1" max="1.0" step="0.05" value="0.35" oninput="updateEchoTime(this.value); document.getElementById('echo-time-val').innerText=this.value+'s'" class="w-full h-1 bg-slate-850 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                        
+                        <!-- Echo Feedback Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Echo Feedback</span>
+                                <span id="echo-feedback-val" class="font-mono text-teal-400">30%</span>
+                            </div>
+                            <input id="echo-feedback-slider" type="range" min="0.0" max="0.9" step="0.05" value="0.30" oninput="updateEchoFeedback(this.value); document.getElementById('echo-feedback-val').innerText=Math.round(this.value*100)+'%'" class="w-full h-1 bg-slate-850 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                        
+                        <!-- Reverb Mix Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Reverb Wet/Dry Mix</span>
+                                <span id="reverb-mix-val" class="font-mono text-teal-400">45%</span>
+                            </div>
+                            <input id="reverb-mix-slider" type="range" min="0.0" max="1.0" step="0.05" value="0.45" oninput="updateReverbWet(this.value); document.getElementById('reverb-mix-val').innerText=Math.round(this.value*100)+'%'" class="w-full h-1 bg-slate-850 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                        
+                        <!-- Reverb Decay Slider -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Arena Decay Size</span>
+                                <span id="reverb-decay-val" class="font-mono text-teal-400">3.5s</span>
+                            </div>
+                            <input id="reverb-decay-slider" type="range" min="1.0" max="5.0" step="0.1" value="3.5" oninput="updateReverbDecay(this.value); document.getElementById('reverb-decay-val').innerText=this.value+'s'" class="w-full h-1 bg-slate-850 rounded-lg appearance-none cursor-pointer accent-teal-400">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registration / Calibration Mode (Optional) -->
+                <div class="border-t border-slate-800 pt-3 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Calibration (Optional)</span>
+                        <button onclick="toggleCalibration()" id="calib-toggle-btn" class="text-xs text-teal-400 hover:text-teal-300 font-mono">Start</button>
+                    </div>
+                    <div id="calibration-panel" class="hidden bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-3">
+                        <div id="calibration-prompt" class="text-[11px] text-slate-300 text-center font-medium leading-relaxed">Step 1: Stand straight in a neutral T-Pose.</div>
+                        <div class="flex justify-between gap-2">
+                            <button onclick="cancelCalibration()" class="w-1/2 p-2 bg-slate-900 hover:bg-slate-850 text-[10px] font-semibold rounded-lg border border-slate-800">Cancel</button>
+                            <button onclick="confirmCalibrationStep()" id="calib-next-btn" class="w-1/2 p-2 bg-teal-600 hover:bg-teal-500 text-[10px] font-semibold rounded-lg">Register Pose</button>
                         </div>
                     </div>
                 </div>
@@ -174,9 +238,24 @@
         let resolvedBones = {};
         let animationFrameId = null;
 
-        // Audio API Contexts
+        // Interactive Calibration States
+        let calibrationState = 0; // 0 = Inactive, 1 = T-Pose, 2 = Left Arm, 3 = Right Arm, 4 = Left Leg, 5 = Right Leg
+        let customBoneLengths = {};
+        let latestJointCoords = null;
+
+        // Jolt Suppression Variables
+        let lastHipsPos = new THREE.Vector3();
+        let joltCooldown = 0;
+        let transitionBlend = 1.0; // 0.0 = full neutral recovery, 1.0 = active mocap targeting
+
+        // Audio API Context Nodes
         let audioCtx = null;
         let audioSource = null;
+        let delayNode = null;
+        let delayGainNode = null;
+        let reverbNode = null;
+        let reverbGainNode = null;
+        let dryGainNode = null;
 
         const setupView = document.getElementById('setup-view');
         const phoneView = document.getElementById('phone-view');
@@ -320,44 +399,69 @@
                 gate.attack.value = 0.01;
                 gate.release.value = 0.25;
 
-                // 3. Concert Echo Node (Slapback feedback)
-                const delay = audioCtx.createDelay(1.0);
-                delay.delayTime.value = 0.35; 
+                // 3. Concert Echo Delay
+                delayNode = audioCtx.createDelay(1.0);
+                delayNode.delayTime.value = parseFloat(document.getElementById('echo-time-slider').value); 
                 
-                const delayGain = audioCtx.createGain();
-                delayGain.gain.value = 0.3; 
+                delayGainNode = audioCtx.createGain();
+                delayGainNode.gain.value = parseFloat(document.getElementById('echo-feedback-slider').value); 
                 
-                delay.connect(delayGain);
-                delayGain.connect(delay);
+                delayNode.connect(delayGainNode);
+                delayGainNode.connect(delayNode);
                 
-                // 4. Stadium Reverb convolver
-                const convolver = audioCtx.createConvolver();
-                convolver.buffer = createArenaReverbBuffer(audioCtx, 3.5, 3.0);
+                // 4. Convolver Arena Reverb
+                reverbNode = audioCtx.createConvolver();
+                reverbNode.buffer = createArenaReverbBuffer(audioCtx, parseFloat(document.getElementById('reverb-decay-slider').value), 3.0);
                 
-                const reverbGain = audioCtx.createGain();
-                reverbGain.gain.value = 0.45; 
+                reverbGainNode = audioCtx.createGain();
+                const wetMix = parseFloat(document.getElementById('reverb-mix-slider').value);
+                reverbGainNode.gain.value = wetMix; 
 
-                const dryGain = audioCtx.createGain();
-                dryGain.gain.value = 0.7; 
+                dryGainNode = audioCtx.createGain();
+                dryGainNode.gain.value = 1.0 - wetMix * 0.4; 
 
-                // Connect routing pipeline
+                // Connections
                 audioSource.connect(hpFilter);
                 hpFilter.connect(lpFilter);
                 lpFilter.connect(gate);
                 
-                // Direct vs Wet outputs
-                gate.connect(dryGain);
-                gate.connect(delay);
-                gate.connect(convolver);
+                gate.connect(dryGainNode);
+                gate.connect(delayNode);
+                gate.connect(reverbNode);
                 
-                convolver.connect(reverbGain);
+                reverbNode.connect(reverbGainNode);
                 
-                // Output routing
-                dryGain.connect(audioCtx.destination);
-                delayGain.connect(audioCtx.destination);
-                reverbGain.connect(audioCtx.destination);
+                dryGainNode.connect(audioCtx.destination);
+                delayGainNode.connect(audioCtx.destination);
+                reverbGainNode.connect(audioCtx.destination);
             } catch (err) {
                 console.error("Audio DSP init failed: ", err);
+            }
+        }
+
+        // Live Audio Param Setters
+        function updateEchoTime(val) {
+            if (delayNode && audioCtx) {
+                delayNode.delayTime.linearRampToValueAtTime(parseFloat(val), audioCtx.currentTime + 0.1);
+            }
+        }
+        function updateEchoFeedback(val) {
+            if (delayGainNode && audioCtx) {
+                delayGainNode.gain.linearRampToValueAtTime(parseFloat(val), audioCtx.currentTime + 0.1);
+            }
+        }
+        function updateReverbWet(val) {
+            const wet = parseFloat(val);
+            if (reverbGainNode && audioCtx) {
+                reverbGainNode.gain.linearRampToValueAtTime(wet, audioCtx.currentTime + 0.1);
+            }
+            if (dryGainNode && audioCtx) {
+                dryGainNode.gain.linearRampToValueAtTime(1.0 - wet * 0.4, audioCtx.currentTime + 0.1);
+            }
+        }
+        function updateReverbDecay(val) {
+            if (reverbNode && audioCtx) {
+                reverbNode.buffer = createArenaReverbBuffer(audioCtx, parseFloat(val), 3.0);
             }
         }
 
@@ -838,10 +942,14 @@
                 euler.y = 0;
                 euler.x = Math.max(-2.3, Math.min(euler.x, 0.0));
             } else if (boneName.includes('UpLeg')) {
-                // Hip joint motion angles
-                euler.x = Math.max(-0.8, Math.min(euler.x, 1.3));
-                euler.y = Math.max(-0.4, Math.min(euler.y, 0.4));
-                euler.z = Math.max(-0.4, Math.min(euler.z, 0.4));
+                // Hip limits: heavily restrict twisting (Y) and side spread (Z) to prevent crossed/stuck legs
+                euler.x = Math.max(-0.5, Math.min(euler.x, 1.2)); 
+                euler.y = Math.max(-0.2, Math.min(euler.y, 0.2)); 
+                euler.z = Math.max(-0.25, Math.min(euler.z, 0.25)); 
+            } else if (boneName.includes('Leg') && !boneName.includes('UpLeg')) {
+                // Leg calf segments: absolutely prevent Y (twist) and Z (side bend) relative to thigh
+                euler.y = 0;
+                euler.z = 0;
             } else if (boneName.includes('Arm') && !boneName.includes('Fore')) {
                 // Shoulder joint spherical limits
                 euler.x = Math.max(-1.4, Math.min(euler.x, 1.4));
@@ -850,6 +958,128 @@
             }
             
             quat.setFromEuler(euler);
+        }
+
+        // ==================== JOLT & HARD RESET TRIGGERS ====================
+        function triggerJoltReset() {
+            transitionBlend = 0.0; // Instantly return model to T-pose/neutral orientations
+            joltCooldown = 45; // Avoid immediately double-triggering resets during quick recoveries
+            
+            const info = document.getElementById('model-info');
+            if (info) {
+                info.innerHTML = `<div class="text-red-400 font-bold animate-pulse">⚡ JOLT RECOVERY ACTIVE: Smoothing Pose...</div>` + info.innerHTML;
+            }
+        }
+
+        function hardResetPose() {
+            transitionBlend = 0.0;
+            if (loadedModel) {
+                loadedModel.traverse((child) => {
+                    if (child.isBone || child.type === 'Bone') {
+                        child.quaternion.set(0, 0, 0, 1);
+                    }
+                });
+            }
+            if (resolvedBones.Hips) {
+                resolvedBones.Hips.position.set(0, 1.0, 0);
+            }
+            const info = document.getElementById('model-info');
+            if (info) {
+                info.innerHTML = `<div class="text-teal-400 font-semibold">✓ Pose Forced to Neutral (T-Pose)</div>` + info.innerHTML;
+            }
+        }
+
+        // ==================== GUIDED REGISTRATION / CALIBRATION ====================
+        function toggleCalibration() {
+            const panel = document.getElementById('calibration-panel');
+            const btn = document.getElementById('calib-toggle-btn');
+            if (calibrationState === 0) {
+                calibrationState = 1;
+                panel.classList.remove('hidden');
+                btn.innerText = "Active";
+                updateCalibrationUI();
+            } else {
+                cancelCalibration();
+            }
+        }
+
+        function cancelCalibration() {
+            calibrationState = 0;
+            document.getElementById('calibration-panel').classList.add('hidden');
+            document.getElementById('calib-toggle-btn').innerText = "Start";
+            highlightBone(null); 
+        }
+
+        function highlightBone(boneKey) {
+            // Restore default colors
+            if (loadedModel) {
+                loadedModel.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        if (child.userData.originalColor) {
+                            child.material.color.copy(child.userData.originalColor);
+                        }
+                    }
+                });
+            }
+            
+            const bone = resolvedBones[boneKey];
+            if (bone) {
+                bone.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        if (!child.userData.originalColor) {
+                            child.userData.originalColor = child.material.color.clone();
+                        }
+                        child.material.color.setHex(0xfacc15); // Vibrant guide-yellow highlight
+                    }
+                });
+            }
+        }
+
+        function updateCalibrationUI() {
+            const prompt = document.getElementById('calibration-prompt');
+            if (calibrationState === 1) {
+                prompt.innerHTML = `🚶 Step 1: Stand straight in a <span class="text-teal-400 font-bold">neutral T-Pose</span>.`;
+                highlightBone(null);
+            } else if (calibrationState === 2) {
+                prompt.innerHTML = `💪 Step 2: Extend your <span class="text-yellow-400 font-bold">Left Arm</span> out straight.`;
+                highlightBone('LeftArm');
+            } else if (calibrationState === 3) {
+                prompt.innerHTML = `💪 Step 3: Extend your <span class="text-yellow-400 font-bold">Right Arm</span> out straight.`;
+                highlightBone('RightArm');
+            } else if (calibrationState === 4) {
+                prompt.innerHTML = `🦵 Step 4: Lift your <span class="text-yellow-400 font-bold">Left Leg</span> forward.`;
+                highlightBone('LeftUpLeg');
+            } else if (calibrationState === 5) {
+                prompt.innerHTML = `🦵 Step 5: Lift your <span class="text-yellow-400 font-bold">Right Leg</span> forward.`;
+                highlightBone('RightUpLeg');
+            } else {
+                prompt.innerHTML = `<span class="text-green-400 font-semibold">✓ Custom Dimensions Registered!</span>`;
+                setTimeout(() => {
+                    cancelCalibration();
+                }, 2000);
+            }
+        }
+
+        function confirmCalibrationStep() {
+            if (calibrationState > 5) return;
+            
+            if (latestJointCoords) {
+                if (calibrationState === 1 && latestJointCoords.leftShoulder && latestJointCoords.rightShoulder) {
+                    customBoneLengths.shoulderWidth = latestJointCoords.leftShoulder.distanceTo(latestJointCoords.rightShoulder);
+                    customBoneLengths.spineLength = latestJointCoords.spineBottom.distanceTo(latestJointCoords.spineTop);
+                } else if (calibrationState === 2 && latestJointCoords.leftShoulder && latestJointCoords.leftWrist) {
+                    customBoneLengths.leftArmLength = latestJointCoords.leftShoulder.distanceTo(latestJointCoords.leftWrist);
+                } else if (calibrationState === 3 && latestJointCoords.rightShoulder && latestJointCoords.rightWrist) {
+                    customBoneLengths.rightArmLength = latestJointCoords.rightShoulder.distanceTo(latestJointCoords.rightWrist);
+                } else if (calibrationState === 4 && latestJointCoords.leftHip && latestJointCoords.leftAnkle) {
+                    customBoneLengths.leftLegLength = latestJointCoords.leftHip.distanceTo(latestJointCoords.leftAnkle);
+                } else if (calibrationState === 5 && latestJointCoords.rightHip && latestJointCoords.rightAnkle) {
+                    customBoneLengths.rightLegLength = latestJointCoords.rightHip.distanceTo(latestJointCoords.rightAnkle);
+                }
+            }
+            
+            calibrationState++;
+            updateCalibrationUI();
         }
 
         // ==================== POSE PROCESSING ====================
@@ -892,7 +1122,6 @@
             // Reconstruct upper and lower spine midpoints
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
-                // Assign shoulder tracking vector points
                 jointCoords.leftUpperArm = jointCoords.leftShoulder;
                 jointCoords.rightUpperArm = jointCoords.rightShoulder;
             }
@@ -905,8 +1134,22 @@
             if (jointCoords.rightAnkle) {
                 jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
             }
+
+            // Expose globally for calibration
+            latestJointCoords = jointCoords;
+
+            // 1. Jolt Detection Filter: check sudden, physiologically impossible root joint displacement
+            const currentHipsPos = jointCoords.spineBottom;
+            if (currentHipsPos && lastHipsPos.lengthSq() > 0) {
+                const stepDisplacement = currentHipsPos.distanceTo(lastHipsPos);
+                if (stepDisplacement > 0.4 && joltCooldown === 0) { 
+                    triggerJoltReset();
+                }
+            }
+            if (currentHipsPos) lastHipsPos.copy(currentHipsPos);
+            if (joltCooldown > 0) joltCooldown--;
             
-            // 1. 360° Torso Twist tracking using orthogonal Basis Matrices
+            // 2. 360° Torso Twist tracking using orthogonal Basis Matrices
             if (jointCoords.leftShoulder && jointCoords.rightShoulder && jointCoords.spineTop && jointCoords.spineBottom) {
                 const u = new THREE.Vector3().subVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).normalize(); // X direction
                 const v = new THREE.Vector3().subVectors(jointCoords.spineTop, jointCoords.spineBottom).normalize();    // Y direction
@@ -918,17 +1161,28 @@
                 const torsoQuat = new THREE.Quaternion().setFromRotationMatrix(basisMat);
                 
                 if (resolvedBones.Hips) {
-                    resolvedBones.Hips.quaternion.slerp(torsoQuat, 0.2);
+                    const blendedTorso = new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), torsoQuat, transitionBlend);
+                    resolvedBones.Hips.quaternion.slerp(blendedTorso, 0.2);
                 }
             }
             
-            // 2. Limb calculation with rotational limits & anomaly damping
+            // 3. Limb calculations with visibility-drop fallbacks (prevents stuck joints)
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
                 const endPos = jointCoords[link.endJoint];
+                const lmStart = worldLms[jointIndices[link.startJoint] || 0];
+                const lmEnd = worldLms[jointIndices[link.endJoint] || 0];
                 
-                if (boneNode && startPos && endPos && link.defaultLocalDir) {
+                if (!boneNode) return;
+
+                // Visibility validation: Slerp smoothly back to neutral downward pose if tracking drops/occludes
+                if (!startPos || !endPos || !lmStart || !lmEnd || lmStart.visibility < 0.65 || lmEnd.visibility < 0.65) {
+                    boneNode.quaternion.slerp(new THREE.Quaternion(), 0.1); 
+                    return;
+                }
+                
+                if (link.defaultLocalDir) {
                     const targetDirWorld = new THREE.Vector3().subVectors(endPos, startPos).normalize();
                     const targetDirLocal = targetDirWorld.clone();
                     if (boneNode.parent) {
@@ -939,18 +1193,20 @@
                     }
                     const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
                     
-                    // Tracking dampening: Adjust speed if joints exceed threshold
-                    const angleDiff = boneNode.quaternion.angleTo(rotationQuaternion);
+                    // Slerp from rest to tracking rotation depending on jolt transition blend
+                    const blendedQuat = new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), rotationQuaternion, transitionBlend);
+                    
+                    const angleDiff = boneNode.quaternion.angleTo(blendedQuat);
                     const dynamicSlerp = angleDiff > 1.2 ? 0.05 : 0.25; 
                     
-                    boneNode.quaternion.slerp(rotationQuaternion, dynamicSlerp);
+                    boneNode.quaternion.slerp(blendedQuat, dynamicSlerp);
                     
-                    // Clamp unnatural 360 degree rotational behaviors
+                    // Clamp rotational bounds to anatomically sound limits
                     clampJointRotation(link.bone, boneNode.quaternion);
                 }
             });
 
-            // 3. Procedural Finger articulation (curls fingers if knuckles track close to wrist)
+            // 4. Procedural Finger articulation (curls fingers if knuckles track close to wrist)
             if (resolvedBones.LeftHand && jointCoords.leftWrist && worldLms[17] && worldLms[19]) {
                 const lWrist = new THREE.Vector3(-worldLms[15].x, -worldLms[15].y, -worldLms[15].z);
                 const lPinky = new THREE.Vector3(-worldLms[17].x, -worldLms[17].y, -worldLms[17].z);
@@ -960,7 +1216,6 @@
                 const dIndex = lWrist.distanceTo(lIndex);
                 const avgDist = (dPinky + dIndex) / 2.0;
                 
-                // Track finger posture: distance transitions between 0.08m (fist) and 0.20m (open palm)
                 const openFactor = THREE.MathUtils.clamp((avgDist - 0.08) / 0.12, 0.0, 1.0);
                 const curlAngle = (1.0 - openFactor) * (Math.PI / 2.0);
                 
@@ -998,7 +1253,7 @@
                 });
             }
             
-            // Positioning calculations for root bone translation
+            // Scaled positioning calculations for root bone translation
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 const targetX = jointCoords.spineBottom.x / scaleY;
@@ -1014,6 +1269,12 @@
         function animate() {
             animationFrameId = requestAnimationFrame(animate);
             if (controls) controls.update();
+            
+            // Smoothly interpolate transition blending back up to mocap control after resets
+            if (transitionBlend < 1.0) {
+                transitionBlend = Math.min(1.0, transitionBlend + 0.03); 
+            }
+            
             if (renderer && scene && camera) {
                 renderer.render(scene, camera);
             }
@@ -1065,6 +1326,16 @@
         window.resetApp = resetApp;
         window.handleModelFile = handleModelFile;
         window.loadFromURLInput = loadFromURLInput;
+        window.hardResetPose = hardResetPose;
+        window.toggleCalibration = toggleCalibration;
+        window.cancelCalibration = cancelCalibration;
+        window.confirmCalibrationStep = confirmCalibrationStep;
+        
+        // Live audio mappings
+        window.updateEchoTime = updateEchoTime;
+        window.updateEchoFeedback = updateEchoFeedback;
+        window.updateReverbWet = updateReverbWet;
+        window.updateReverbDecay = updateReverbDecay;
     </script>
 </body>
 </html>
