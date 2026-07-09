@@ -1,22 +1,16 @@
---- START OF FILE Paste July 09, 2026 - 7:38PM ---
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Rig-Mirror 3D - Universal Mocap</title>
+    <title>Rig-Mirror 3D v3 - Pro Mocap Studio</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Three.js Core -->
+    <!-- Three.js Core & Loaders -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    
-    <!-- fflate (Decompression library required by FBXLoader in modern Three.js) -->
     <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.0/umd/index.min.js"></script>
-    
-    <!-- Three.js Addons -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/FBXLoader.js"></script>
@@ -32,48 +26,136 @@
         video { transform: scaleX(-1); }
         #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
-        #pip-canvas { transform: scaleX(-1); } /* Mirror reflection for intuitive user feedback */
-        @media (max-width: 640px) {
-            #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
-            #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
+        #pip-canvas { transform: scaleX(-1); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #1e293b;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
         }
-        .loader-spinner {
-            border: 2px solid rgba(0, 243, 255, 0.2);
-            border-top: 2px solid #00f3ff;
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            animation: spin 0.8s linear infinite;
-            display: inline-block;
+            background: #0d9488;
+            cursor: pointer;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
-    <!-- Header -->
-    <header class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between z-10 shrink-0">
-        <div class="flex items-center gap-2">
-            <span class="text-xl font-bold tracking-wider text-teal-400">⚡ Rig-Mirror 3D</span>
-            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">v2 • Improved</span>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col selection:bg-teal-500 selection:text-slate-900">
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-xl font-black tracking-wider text-teal-400 bg-clip-text">⚡ RIG-MIRROR 3D</span>
+            <span class="text-xs bg-teal-950/80 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono font-bold">v3.0 Pro</span>
         </div>
-        <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
+        
+        <div class="flex items-center gap-4">
+            <!-- Real-time performance monitors -->
+            <div id="perf-monitor" class="hidden sm:flex items-center gap-3 text-xs text-slate-400 font-mono">
+                <div>FPS: <span id="fps-val" class="text-teal-400 font-bold">--</span></div>
+                <div class="w-px h-3 bg-slate-800"></div>
+                <div>Latency: <span id="latency-val" class="text-teal-400 font-bold">-- ms</span></div>
+            </div>
+            
+            <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
+            </div>
         </div>
     </header>
 
-    <!-- Main Viewport -->
-    <main class="relative flex-grow w-full overflow-hidden">
-        <!-- 1. SETUP SCREEN -->
+    <!-- MAIN INTERACTIVE VIEWPORT -->
+    <main class="relative flex-grow w-full overflow-hidden flex flex-row">
+        
+        <!-- SIDEBAR CONTROLS (Only visible on displays/PC mode) -->
+        <aside id="control-sidebar" class="hidden lg:flex flex-col w-80 bg-slate-900 border-r border-slate-800 overflow-y-auto no-scrollbar shrink-0 p-5 space-y-6 z-20">
+            <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Mocap Settings</h3>
+                
+                <!-- Calibration Control -->
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <span class="text-[11px] font-bold text-teal-400 uppercase tracking-widest block">User Proportions</span>
+                    <button id="btn-calibrate" onclick="triggerCalibration()" class="w-full py-2 bg-teal-600 hover:bg-teal-500 text-xs font-bold rounded-lg transition-all duration-150">
+                        📏 Align & Calibrate T-Pose
+                    </button>
+                    <div class="text-[10px] text-slate-400 space-y-1 mt-2">
+                        <div>Height Scale: <span id="cal-height" class="font-mono text-white">1.00x</span></div>
+                        <div>Arm Span: <span id="cal-arms" class="font-mono text-white">0.00 m</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- One Euro Filtering Adjustments -->
+            <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">One Euro Filter</h3>
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs font-mono text-slate-400">
+                            <span>Min Cutoff</span>
+                            <span id="cutoff-label" class="text-teal-400">1.0 Hz</span>
+                        </div>
+                        <input id="slider-cutoff" type="range" min="0.1" max="10" step="0.1" value="1.0" class="w-full custom-slider" oninput="updateFilters()">
+                    </div>
+                    
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs font-mono text-slate-400">
+                            <span>Beta Factor</span>
+                            <span id="beta-label" class="text-teal-400">0.007</span>
+                        </div>
+                        <input id="slider-beta" type="range" min="0.001" max="0.1" step="0.001" value="0.007" class="w-full custom-slider" oninput="updateFilters()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Settings and Mapping Status -->
+            <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Retargeting Engine</h3>
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div class="flex justify-between items-center text-xs text-slate-400">
+                        <span>IK Foot Locking</span>
+                        <input id="toggle-ik" type="checkbox" checked class="w-4 h-4 accent-teal-500" onchange="toggleIKSettings()">
+                    </div>
+                    <div class="flex justify-between items-center text-xs text-slate-400">
+                        <span>Prediction Interpolation</span>
+                        <input id="toggle-prediction" type="checkbox" checked class="w-4 h-4 accent-teal-500">
+                    </div>
+                    <div class="flex justify-between items-center text-xs text-slate-400">
+                        <span>Wireframe Mode</span>
+                        <input id="toggle-wireframe" type="checkbox" class="w-4 h-4 accent-teal-500" onchange="toggleWireframe()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Environment lighting settings -->
+            <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Lighting & Rendering</h3>
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div class="space-y-1">
+                        <label class="text-[10px] uppercase font-bold text-slate-500">Light Intensity</label>
+                        <input id="slider-light" type="range" min="0.1" max="3" step="0.1" value="1.0" class="w-full custom-slider" oninput="updateLightSettings()">
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- SETUP VIEW -->
         <div id="setup-view" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-40 overflow-y-auto">
             <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
                 <div>
                     <h2 class="text-2xl font-bold mb-2 text-white">Choose Your Device Role</h2>
-                    <p class="text-sm text-slate-400">Transform your phone into an intelligent motion-capture camera and mirror onto any 3D model on your computer.</p>
+                    <p class="text-sm text-slate-400">Select whether this device acts as the main viewport or raw input source.</p>
                 </div>
                 <div class="space-y-4">
                     <button onclick="startAsDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-xl font-semibold shadow-lg shadow-teal-900/30 transition-all duration-200">
                         🖥️ Display Screen (PC/Laptop)
-                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models and handles motion analysis</span>
+                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models and runs motion synthesis</span>
                     </button>
                     <div class="flex items-center justify-center gap-2 my-2 text-xs text-slate-500">
                         <span class="h-px bg-slate-800 flex-grow"></span> OR <span class="h-px bg-slate-800 flex-grow"></span>
@@ -86,24 +168,38 @@
             </div>
         </div>
 
-        <!-- 2. PHONE STREAMER VIEW -->
+        <!-- CAMERA STREAMER VIEW -->
         <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 z-30">
             <div class="max-w-sm w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
                 <h2 class="text-xl font-bold text-center">📱 Phone Camera Streamer</h2>
                
-                <div id="phone-input-container" class="space-y-3">
+                <div id="phone-input-container" class="space-y-4">
                     <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from PC Display</label>
                     <input id="target-peer-code" type="text" placeholder="ABCDE" maxlength="5" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
+                    
+                    <!-- Advanced Camera Options -->
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <select id="camera-facing" class="bg-slate-950 border border-slate-800 p-2 rounded text-slate-300">
+                            <option value="user">Front Camera</option>
+                            <option value="environment">Rear Camera</option>
+                        </select>
+                        <select id="video-zoom" class="bg-slate-950 border border-slate-800 p-2 rounded text-slate-300">
+                            <option value="1.0">Zoom 1.0x</option>
+                            <option value="1.5">Zoom 1.5x</option>
+                            <option value="0.75">Zoom 0.75x</option>
+                        </select>
+                    </div>
+
                     <button onclick="connectToDisplay()" class="w-full p-3 bg-teal-600 hover:bg-teal-500 font-semibold rounded-lg transition duration-200">
                         Establish Link & Stream
                     </button>
                 </div>
+                
                 <div id="phone-stream-container" class="hidden space-y-4">
-                    <div class="relative aspect-[9/16] bg-black border border-slate-800 rounded-lg overflow-hidden max-h-[60vh]">
+                    <div class="relative aspect-[9/16] bg-black border border-slate-800 rounded-lg overflow-hidden max-h-[50vh]">
                         <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                        <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-slate-300">📹 Live</div>
+                        <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-slate-300">📹 Live Stream</div>
                     </div>
-                    <p class="text-xs text-slate-400 text-center">📱 Hold your phone <span class="font-bold text-white">vertically</span> for best full-body capture. Ensure good lighting.</p>
                     <button onclick="resetApp()" class="w-full p-3 bg-red-600 hover:bg-red-500 font-semibold rounded-lg transition duration-200">
                         Disconnect Stream
                     </button>
@@ -111,14 +207,14 @@
             </div>
         </div>
 
-        <!-- 3. PC DISPLAY VIEW -->
-        <div id="display-view" class="hidden absolute inset-0 w-full h-full">
+        <!-- PC VISUALIZATION VIEW -->
+        <div id="display-view" class="hidden absolute inset-0 w-full h-full flex flex-row">
             <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
             
-            <!-- Floating Dashboard -->
-            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto">
+            <!-- Dashboard Overlay -->
+            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl w-80 z-20 space-y-4 backdrop-blur pointer-events-auto">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard</h3>
+                    <h3 class="font-bold text-sm tracking-wide text-white">System Controller</h3>
                     <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
                 </div>
                
@@ -126,7 +222,7 @@
                     <span class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider block">Link Code</span>
                     <div class="flex items-center gap-3">
                         <span id="display-peer-code" class="text-2xl font-mono font-bold text-teal-400">Generating...</span>
-                        <span class="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Enter on phone</span>
+                        <span class="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Enter on mobile</span>
                     </div>
                 </div>
                 
@@ -135,231 +231,238 @@
                     <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Load Custom 3D Model</label>
                     <div class="flex flex-col gap-2">
                         <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
-                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload .glb / .gltf / .fbx</span>
+                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop GLB / GLTF / FBX file</span>
                             <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
                         </label>
-                        <div class="flex gap-2">
-                            <input id="model-url" type="text" placeholder="Or enter GLB/FBX URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
-                            <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
-                        </div>
                     </div>
                 </div>
                 
                 <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
-                    <div><span class="font-semibold text-slate-300">Default Avatar:</span> Low-poly tracking mannequin.</div>
-                    <div>Upload a rigged <span class="text-teal-400 font-mono">.glb/.fbx</span> model to test customized rigs.</div>
+                    <div><span class="font-semibold text-slate-300">Avatar:</span> Default low-poly mannequin</div>
                 </div>
             </div>
             
-            <!-- Video PiP with Chroma Key Background Masking -->
-            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
+            <!-- Video PIP Frame with Chroma Key Overlay -->
+            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-44 h-32 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
                 <video id="remote-video" autoplay playsinline muted class="hidden"></video>
                 <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
-                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Chroma Feed</div>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">🎥 Video Feed</div>
             </div>
         </div>
     </main>
 
+    <!-- SYSTEM CORE INJECTIONS -->
     <script>
+        // ==================== ONE EURO FILTER IMPLEMENTATION ====================
+        class LowPassFilter {
+            constructor(alpha) {
+                this.alpha = alpha;
+                this.y = null;
+            }
+            filter(value) {
+                if (this.y === null) {
+                    this.y = value;
+                } else {
+                    this.y = this.alpha * value + (1 - this.alpha) * this.y;
+                }
+                return this.y;
+            }
+        }
+
+        class OneEuroFilter {
+            constructor(freq, mincutoff = 1.0, beta = 0.007, dcutoff = 1.0) {
+                this.freq = freq;
+                this.mincutoff = mincutoff;
+                this.beta = beta;
+                this.dcutoff = dcutoff;
+                this.xFilter = new LowPassFilter(this.alpha(mincutoff));
+                this.dxFilter = new LowPassFilter(this.alpha(dcutoff));
+                this.lastTime = null;
+            }
+            alpha(cutoff) {
+                const te = 1.0 / this.freq;
+                const tau = 1.0 / (2 * Math.PI * cutoff);
+                return 1.0 / (1.0 + tau / te);
+            }
+            filter(value, timestamp) {
+                if (this.lastTime !== null && timestamp > this.lastTime) {
+                    this.freq = 1.0 / (timestamp - this.lastTime);
+                }
+                this.lastTime = timestamp;
+                const dval = this.xFilter.y === null ? 0 : (value - this.xFilter.y) * this.freq;
+                const edval = this.dxFilter.filter(dval);
+                const cutoff = this.mincutoff + this.beta * Math.abs(edval);
+                this.xFilter.alpha = this.alpha(cutoff);
+                return this.xFilter.filter(value);
+            }
+        }
+
+        class OneEuroFilter3D {
+            constructor(mincutoff = 1.0, beta = 0.007) {
+                this.xFilter = new OneEuroFilter(30, mincutoff, beta);
+                this.yFilter = new OneEuroFilter(30, mincutoff, beta);
+                this.zFilter = new OneEuroFilter(30, mincutoff, beta);
+            }
+            filter(vec, timestamp) {
+                return new THREE.Vector3(
+                    this.xFilter.filter(vec.x, timestamp),
+                    this.yFilter.filter(vec.y, timestamp),
+                    this.zFilter.filter(vec.z, timestamp)
+                );
+            }
+        }
+
+        // ==================== TEMPORAL POSE BUFFER (PREDICTION) ====================
+        class TemporalPoseBuffer {
+            constructor(maxSize = 30) {
+                this.maxSize = maxSize;
+                this.buffer = [];
+            }
+            add(landmarks) {
+                const timestamp = performance.now() / 1000.0;
+                this.buffer.push({ timestamp, landmarks });
+                if (this.buffer.length > this.maxSize) {
+                    this.buffer.shift();
+                }
+            }
+            getVelocity(jointIndex) {
+                if (this.buffer.length < 2) return new THREE.Vector3(0, 0, 0);
+                const latest = this.buffer[this.buffer.length - 1];
+                const prev = this.buffer[this.buffer.length - 2];
+                const dt = latest.timestamp - prev.timestamp;
+                if (dt <= 0) return new THREE.Vector3(0, 0, 0);
+                
+                const pt1 = latest.landmarks[jointIndex];
+                const pt2 = prev.landmarks[jointIndex];
+                if (!pt1 || !pt2) return new THREE.Vector3(0, 0, 0);
+                
+                return new THREE.Vector3(
+                    (pt1.x - pt2.x) / dt,
+                    (pt1.y - pt2.y) / dt,
+                    (pt1.z - pt2.z) / dt
+                );
+            }
+            predict(jointIndex, dt) {
+                if (this.buffer.length < 2) return null;
+                const latest = this.buffer[this.buffer.length - 1];
+                const currentPt = latest.landmarks[jointIndex];
+                if (!currentPt) return null;
+                
+                const velocity = this.getVelocity(jointIndex);
+                return new THREE.Vector3(
+                    currentPt.x + velocity.x * dt,
+                    currentPt.y + velocity.y * dt,
+                    currentPt.z + velocity.z * dt
+                );
+            }
+        }
+
+        // ==================== FABRIK INVERSE KINEMATICS SOLVER ====================
+        class FABRIKSolver {
+            constructor(boneChain, target, maxIterations = 8, tolerance = 0.002) {
+                this.bones = boneChain;
+                this.target = target;
+                this.maxIterations = maxIterations;
+                this.tolerance = tolerance;
+            }
+            solve() {
+                if (this.bones.length < 2) return;
+                const positions = [];
+                const worldMatrices = [];
+                const parentWorldMatrices = [];
+                
+                for (let i = 0; i < this.bones.length; i++) {
+                    const bone = this.bones[i];
+                    const pos = new THREE.Vector3();
+                    bone.getWorldPosition(pos);
+                    positions.push(pos);
+                    worldMatrices.push(bone.matrixWorld.clone());
+                    parentWorldMatrices.push(bone.parent ? bone.parent.matrixWorld.clone() : new THREE.Matrix4());
+                }
+                
+                const lengths = [];
+                for (let i = 0; i < positions.length - 1; i++) {
+                    lengths.push(positions[i].distanceTo(positions[i + 1]));
+                }
+                
+                const totalLength = lengths.reduce((a, b) => a + b, 0);
+                const origin = positions[0].clone();
+                const targetPos = this.target.clone();
+                
+                if (origin.distanceTo(targetPos) > totalLength) {
+                    for (let i = 0; i < positions.length - 1; i++) {
+                        const dir = new THREE.Vector3().subVectors(targetPos, positions[i]).normalize();
+                        positions[i + 1].copy(positions[i]).addScaledVector(dir, lengths[i]);
+                    }
+                } else {
+                    let iter = 0;
+                    while (iter < this.maxIterations && positions[positions.length - 1].distanceTo(targetPos) > this.tolerance) {
+                        positions[positions.length - 1].copy(targetPos);
+                        for (let i = positions.length - 2; i >= 0; i--) {
+                            const dir = new THREE.Vector3().subVectors(positions[i], positions[i + 1]).normalize();
+                            positions[i].copy(positions[i + 1]).addScaledVector(dir, lengths[i]);
+                        }
+                        positions[0].copy(origin);
+                        for (let i = 0; i < positions.length - 1; i++) {
+                            const dir = new THREE.Vector3().subVectors(positions[i + 1], positions[i]).normalize();
+                            positions[i + 1].copy(positions[i]).addScaledVector(dir, lengths[i]);
+                        }
+                        iter++;
+                    }
+                }
+                
+                for (let i = 0; i < this.bones.length - 1; i++) {
+                    const bone = this.bones[i];
+                    const parentInv = new THREE.Matrix4().copy(parentWorldMatrices[i]).invert();
+                    const pCurrent = positions[i].clone().applyMatrix4(parentInv);
+                    const pNext = positions[i + 1].clone().applyMatrix4(parentInv);
+                    
+                    const dirLocal = new THREE.Vector3().subVectors(pNext, pCurrent).normalize();
+                    const childBone = this.bones[i + 1];
+                    const defaultDir = childBone.position.clone().normalize();
+                    
+                    if (defaultDir.lengthSq() > 0.001) {
+                        const rot = new THREE.Quaternion().setFromUnitVectors(defaultDir, dirLocal);
+                        bone.quaternion.copy(rot);
+                    }
+                    bone.updateMatrixWorld(true);
+                }
+            }
+        }
+
         // ==================== CORE VARIABLES ====================
         let peer = null;
-        let peerId = "";
         let localStream = null;
-        let poseDetector = null;
         let activeCall = null;
-        let processingLoopActive = false;
-        let lastProcessed = 0;
-        let modelLoadAttempts = 0;
-        
-        let scene, camera, renderer, controls;
+        let poseDetector = null;
+        let scene, camera, renderer, controls, lightKey;
         let loadedModel = null;
         let resolvedBones = {};
         let animationFrameId = null;
+        
+        let systemFilters = {};
+        const poseBuffer = new TemporalPoseBuffer();
+        let calibrationData = { calibrated: false, userHeight: 1.65, scaleFactor: 1.0 };
+        let metrics = { fps: 0, lastFrameTime: 0, lastRecvTime: 0 };
 
-        const setupView = document.getElementById('setup-view');
-        const phoneView = document.getElementById('phone-view');
-        const displayView = document.getElementById('display-view');
-
-        // ==================== UTILS ====================
-        function generateCode() {
-            return Math.random().toString(36).substring(2, 7).toUpperCase();
-        }
-
-        function setStatus(status, label) {
-            const badge = document.getElementById('status-badge');
-            if (status === 'connected') {
-                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block"></span> ${label}`;
-                badge.className = "bg-green-950/40 border border-green-800/40 px-3 py-1 rounded-full text-xs font-semibold text-green-400 flex items-center gap-2";
-            } else if (status === 'loading') {
-                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-yellow-500 rounded-full inline-block animate-bounce"></span> ${label}`;
-                badge.className = "bg-yellow-950/40 border border-yellow-800/40 px-3 py-1 rounded-full text-xs font-semibold text-yellow-400 flex items-center gap-2";
-            } else {
-                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> ${label}`;
-                badge.className = "bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2";
-            }
-        }
-
-        function disposeThreeJS() {
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            if (renderer) {
-                renderer.dispose();
-                if (renderer.domElement && renderer.domElement.parentNode) {
-                    renderer.domElement.parentNode.removeChild(renderer.domElement);
-                }
-            }
-            if (loadedModel) {
-                loadedModel.traverse((child) => {
-                    if (child.geometry) child.geometry.dispose();
-                    if (child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => m.dispose());
-                        } else {
-                            child.material.dispose();
-                        }
-                    }
-                });
-            }
-            scene = camera = renderer = controls = loadedModel = null;
-            resolvedBones = {};
-        }
-
-        // ==================== PHONE MODE ====================
-        function startAsCamera() {
-            setupView.classList.add('hidden');
-            phoneView.classList.remove('hidden');
-            setStatus('offline', 'Source Mode');
-            peer = new Peer();
-            peer.on('error', (err) => {
-                alert("Connection failed: " + err.message);
-                resetApp();
-            });
-        }
-
-        async function connectToDisplay() {
-            const codeInput = document.getElementById('target-peer-code').value.trim().toUpperCase();
-            if (!codeInput || codeInput.length !== 5) {
-                alert("Please enter the 5-digit code shown on the display PC.");
-                return;
-            }
-            setStatus('loading', 'Accessing Camera...');
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
-                    audio: false
-                });
-                document.getElementById('local-video').srcObject = localStream;
-                document.getElementById('phone-input-container').classList.add('hidden');
-                document.getElementById('phone-stream-container').classList.remove('hidden');
-               
-                setStatus('loading', 'Connecting...');
-                const targetPeerId = "WM-MOCAP-" + codeInput;
-                const call = peer.call(targetPeerId, localStream);
-                activeCall = call;
-                call.on('close', () => {
-                    alert("Display connection lost.");
-                    resetApp();
-                });
-                setStatus('connected', 'Live Streaming');
-            } catch (err) {
-                console.error(err);
-                alert("Camera access failed. Ensure this is served via HTTPS or localhost.");
-                setStatus('offline', 'Camera Blocked');
-            }
-        }
-
-        // ==================== DISPLAY MODE ====================
-        function startAsDisplay() {
-            setupView.classList.add('hidden');
-            displayView.classList.remove('hidden');
-            setStatus('loading', 'Initializing...');
-            
-            initThreeJS();
-            initMediaPipe();
-            
-            const pinCode = generateCode();
-            peerId = "WM-MOCAP-" + pinCode;
-            document.getElementById('display-peer-code').innerText = pinCode;
-            
-            peer = new Peer(peerId);
-            peer.on('open', () => {
-                setStatus('offline', 'Awaiting Source...');
-            });
-            peer.on('call', (call) => {
-                setStatus('loading', 'Opening Stream...');
-                call.answer();
-                activeCall = call;
-                call.on('stream', (remoteStream) => {
-                    const videoEl = document.getElementById('remote-video');
-                    document.getElementById('pip-container').classList.remove('hidden');
-                    videoEl.srcObject = remoteStream;
-                    videoEl.onloadedmetadata = () => {
-                        videoEl.play();
-                        startFrameProcessing();
-                        setStatus('connected', 'Mocap Active');
-                    };
-                });
-                call.on('close', () => {
-                    document.getElementById('pip-container').classList.add('hidden');
-                    setStatus('offline', 'Disconnected');
-                });
-            });
-        }
-
-        function initMediaPipe() {
-            poseDetector = new Pose({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-            });
-            poseDetector.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                enableSegmentation: true, // Enables the alpha segmentation mask for background removal
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-            poseDetector.onResults(onPoseAnalysis);
-        }
-
-        function startFrameProcessing() {
-            if (processingLoopActive) return;
-            processingLoopActive = true;
-            const videoElement = document.getElementById('remote-video');
-           
-            async function processFrame() {
-                if (!processingLoopActive) return;
-                const now = Date.now();
-                if (now - lastProcessed > 40) { // Targeting smooth ~25 FPS mapping performance
-                    if (videoElement.readyState >= 2) {
-                        try {
-                            await poseDetector.send({ image: videoElement });
-                        } catch (e) {}
-                    }
-                    lastProcessed = now;
-                }
-                requestAnimationFrame(processFrame);
-            }
-            processFrame();
-        }
-
-        // ==================== THREE.JS SETUP & MAPPING ====================
         const nameAliases = {
-            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root', 'mixamorig:Hips', 'hip', 'pelvis'],
-            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2', 'mixamorig:Spine', 'spine'],
-            Neck: ['mixamorigNeck', 'Neck', 'bip_neck', 'Neck1', 'mixamorig:Neck', 'neck'],
-            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'bip_left_arm', 'upperarm_l', 'L_UpperArm', 'mixamorig:LeftArm', 'l_upperarm'],
-            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'bip_left_forearm', 'lowerarm_l', 'L_Forearm', 'mixamorig:LeftForeArm', 'l_forearm'],
-            LeftHand: ['mixamorigLeftHand', 'LeftHand', 'bip_left_hand', 'hand_l', 'L_Hand', 'mixamorig:LeftHand', 'l_hand'],
-            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'bip_right_arm', 'upperarm_r', 'R_UpperArm', 'mixamorig:RightArm', 'r_upperarm'],
-            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'bip_right_forearm', 'lowerarm_r', 'R_Forearm', 'mixamorig:RightForeArm', 'r_forearm'],
-            RightHand: ['mixamorigRightHand', 'RightHand', 'bip_right_hand', 'hand_r', 'R_Hand', 'mixamorig:RightHand', 'r_hand'],
-            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'bip_left_thigh', 'LeftThigh', 'thigh_l', 'L_Thigh', 'mixamorig:LeftUpLeg', 'l_thigh'],
-            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'bip_left_shin', 'LeftShin', 'calf_l', 'L_Calf', 'mixamorig:LeftLeg', 'l_calf'],
-            LeftFoot: ['mixamorigLeftFoot', 'LeftFoot', 'bip_left_foot', 'foot_l', 'L_Foot', 'mixamorig:LeftFoot', 'l_foot', 'LeftAnkle', 'leftankle'],
-            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'bip_right_thigh', 'RightThigh', 'thigh_r', 'R_Thigh', 'mixamorig:RightUpLeg', 'r_thigh'],
-            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'bip_right_shin', 'RightShin', 'calf_r', 'R_Calf', 'mixamorig:RightLeg', 'r_calf'],
-            RightFoot: ['mixamorigRightFoot', 'RightFoot', 'bip_right_foot', 'foot_r', 'R_Foot', 'mixamorig:RightFoot', 'r_foot', 'RightAnkle', 'rightankle']
+            Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root'],
+            Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1'],
+            Chest: ['mixamorigSpine2', 'Chest', 'Spine2', 'UpperChest'],
+            Neck: ['mixamorigNeck', 'Neck', 'bip_neck', 'Neck1'],
+            Head: ['mixamorigHead', 'Head', 'bip_head', 'head'],
+            LeftArm: ['mixamorigLeftArm', 'LeftArm', 'LeftUpperArm', 'upperarm_l'],
+            LeftForeArm: ['mixamorigLeftForeArm', 'LeftForeArm', 'lowerarm_l'],
+            LeftHand: ['mixamorigLeftHand', 'LeftHand', 'hand_l'],
+            RightArm: ['mixamorigRightArm', 'RightArm', 'RightUpperArm', 'upperarm_r'],
+            RightForeArm: ['mixamorigRightForeArm', 'RightForeArm', 'lowerarm_r'],
+            RightHand: ['mixamorigRightHand', 'RightHand', 'hand_r'],
+            LeftUpLeg: ['mixamorigLeftUpLeg', 'LeftUpLeg', 'LeftThigh', 'thigh_l'],
+            LeftLeg: ['mixamorigLeftLeg', 'LeftLeg', 'LeftShin', 'calf_l'],
+            LeftFoot: ['mixamorigLeftFoot', 'LeftFoot', 'LeftAnkle', 'foot_l'],
+            RightUpLeg: ['mixamorigRightUpLeg', 'RightUpLeg', 'RightThigh', 'thigh_r'],
+            RightLeg: ['mixamorigRightLeg', 'RightLeg', 'RightShin', 'calf_r'],
+            RightFoot: ['mixamorigRightFoot', 'RightFoot', 'RightAnkle', 'foot_r']
         };
 
         const BONE_RIG_LINKS = [
@@ -370,63 +473,150 @@
             { bone: 'LeftUpLeg', child: 'LeftLeg', startJoint: 'leftHip', endJoint: 'leftKnee' },
             { bone: 'LeftLeg', child: 'LeftFoot', startJoint: 'leftKnee', endJoint: 'leftAnkle' },
             { bone: 'RightUpLeg', child: 'RightLeg', startJoint: 'rightHip', endJoint: 'rightKnee' },
-            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' },
-            { bone: 'Spine', child: 'Neck', startJoint: 'spineBottom', endJoint: 'spineTop' }
+            { bone: 'RightLeg', child: 'RightFoot', startJoint: 'rightKnee', endJoint: 'rightAnkle' }
         ];
 
         const jointIndices = {
-            leftShoulder: 11, rightShoulder: 12,
-            leftElbow: 13, rightElbow: 14,
-            leftWrist: 15, rightWrist: 16,
-            leftHip: 23, rightHip: 24,
-            leftKnee: 25, rightKnee: 26,
-            leftAnkle: 27, rightAnkle: 28
+            leftShoulder: 11, rightShoulder: 12, leftElbow: 13, rightElbow: 14,
+            leftWrist: 15, rightWrist: 16, leftHip: 23, rightHip: 24,
+            leftKnee: 25, rightKnee: 26, leftAnkle: 27, rightAnkle: 28,
+            nose: 0, leftEye: 3, rightEye: 6, leftEar: 7, rightEar: 8
         };
 
+        // ==================== SETUP CONTROLLERS ====================
+        function generateCode() {
+            return Math.random().toString(36).substring(2, 7).toUpperCase();
+        }
+
+        function setStatus(status, label) {
+            const badge = document.getElementById('status-badge');
+            if (status === 'connected') {
+                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block animate-pulse"></span> ${label}`;
+                badge.className = "bg-green-950 border border-green-800 px-3 py-1 rounded-full text-xs font-semibold text-green-400 flex items-center gap-2";
+            } else if (status === 'loading') {
+                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-yellow-500 rounded-full inline-block animate-bounce"></span> ${label}`;
+                badge.className = "bg-yellow-950 border border-yellow-800 px-3 py-1 rounded-full text-xs font-semibold text-yellow-400 flex items-center gap-2";
+            } else {
+                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block"></span> ${label}`;
+                badge.className = "bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2";
+            }
+        }
+
+        // ==================== SKELETAL AUTO-MAPPING ====================
+        function mapSkeleton(rootNode) {
+            resolvedBones = {};
+            const bones = [];
+            rootNode.traverse((child) => {
+                if (child.isBone || child.type === 'Bone') {
+                    bones.push(child);
+                }
+            });
+
+            // Pass 1: String mapping
+            bones.forEach(bone => {
+                for (const [key, aliases] of Object.entries(nameAliases)) {
+                    if (resolvedBones[key]) continue;
+                    const nameLower = bone.name.toLowerCase();
+                    for (const alias of aliases) {
+                        const aliasLower = alias.toLowerCase();
+                        if (bone.name === alias || nameLower === aliasLower || nameLower.includes(aliasLower)) {
+                            resolvedBones[key] = bone;
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // Pass 2: Fallback Hierarchy inference
+            if (!resolvedBones.Hips && bones.length > 0) {
+                resolvedBones.Hips = bones[0]; // Guess root
+            }
+            if (resolvedBones.Hips) {
+                const hips = resolvedBones.Hips;
+                if (!resolvedBones.Spine && hips.children.length > 0) {
+                    resolvedBones.Spine = hips.children.find(c => c.isBone && c.position.y > 0.01);
+                }
+            }
+
+            cacheRestPoseDirections();
+            updateRetargetInfo();
+        }
+
+        function cacheRestPoseDirections() {
+            BONE_RIG_LINKS.forEach((link) => {
+                const parent = resolvedBones[link.bone];
+                let child = resolvedBones[link.child];
+                if (!child && parent) {
+                    child = parent.children.find(c => c.isBone);
+                }
+                if (parent && child) {
+                    link.defaultLocalDir = child.position.clone().normalize();
+                } else {
+                    link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
+                }
+            });
+        }
+
+        function updateRetargetInfo() {
+            const count = Object.keys(resolvedBones).length;
+            const infoEl = document.getElementById('model-info');
+            infoEl.innerHTML = `
+                <div><span class="font-semibold text-teal-400">Rig Mapped:</span> ${count} / 17 joints matched</div>
+                <div class="text-[10px] text-slate-500 mt-1">IK foot locking active via dynamic FABRIK</div>
+            `;
+        }
+
+        // ==================== CORE THREE.JS PIPELINE ====================
         function initThreeJS() {
             const container = document.getElementById('canvas-container');
-            disposeThreeJS(); // Safe reset before initialization
-           
+            
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0f111a);
-            scene.fog = new THREE.FogExp2(0x0f111a, 0.12);
-            
+            scene.background = new THREE.Color(0x020617);
+            scene.fog = new THREE.FogExp2(0x020617, 0.08);
+
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-            camera.position.set(0, 1.2, 3);
-            
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            camera.position.set(0, 1.4, 3.2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
             container.appendChild(renderer.domElement);
-            
+
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             controls.target.set(0, 1.0, 0);
-            
+
+            // Lighting System
             const ambient = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambient);
-            
-            const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            keyLight.position.set(5, 8, 5);
-            keyLight.castShadow = true;
-            scene.add(keyLight);
-            
-            const grid = new THREE.GridHelper(10, 20, 0x14b8a6, 0x1e293b);
-            grid.position.y = 0;
+
+            lightKey = new THREE.DirectionalLight(0xffffff, 1.5);
+            lightKey.position.set(4, 7, 5);
+            lightKey.castShadow = true;
+            lightKey.shadow.mapSize.width = 1024;
+            lightKey.shadow.mapSize.height = 1024;
+            lightKey.shadow.bias = -0.001;
+            scene.add(lightKey);
+
+            // Environments
+            const grid = new THREE.GridHelper(12, 24, 0x0d9488, 0x1e293b);
             scene.add(grid);
-            
-            const floorGeo = new THREE.PlaneGeometry(15, 15);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x090b11, roughness: 0.8 });
+
+            const floorGeo = new THREE.PlaneGeometry(20, 20);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x030712, roughness: 0.95 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -0.01;
             floor.receiveShadow = true;
             scene.add(floor);
-            
+
             loadDefaultMannequin();
             animate();
+            
             window.addEventListener('resize', onWindowResize);
         }
 
@@ -439,332 +629,394 @@
         }
 
         function loadDefaultMannequin() {
-            if (loadedModel) scene.remove(loadedModel);
-            resolvedBones = {};
-            
             const group = new THREE.Group();
-            const helperSkeleton = new THREE.Group();
-            group.add(helperSkeleton);
             
             const hips = new THREE.Bone();
             hips.name = "Hips";
             hips.position.set(0, 1.0, 0);
-            helperSkeleton.add(hips);
+            group.add(hips);
             resolvedBones.Hips = hips;
-            
+
             const spine = new THREE.Bone();
             spine.name = "Spine";
-            spine.position.set(0, 0.3, 0);
+            spine.position.set(0, 0.25, 0);
             hips.add(spine);
             resolvedBones.Spine = spine;
-            
+
+            const chest = new THREE.Bone();
+            chest.name = "Chest";
+            chest.position.set(0, 0.2, 0);
+            spine.add(chest);
+            resolvedBones.Chest = chest;
+
             const neck = new THREE.Bone();
             neck.name = "Neck";
-            neck.position.set(0, 0.2, 0);
-            spine.add(neck);
+            neck.position.set(0, 0.15, 0);
+            chest.add(neck);
             resolvedBones.Neck = neck;
-            
+
+            const head = new THREE.Bone();
+            head.name = "Head";
+            head.position.set(0, 0.1, 0);
+            neck.add(head);
+            resolvedBones.Head = head;
+
             const limbs = [
-                { parent: spine, name: 'LeftArm', pos: [0.15, 0.15, 0], childName: 'LeftForeArm', childPos: [0.25, 0, 0] },
-                { parent: spine, name: 'RightArm', pos: [-0.15, 0.15, 0], childName: 'RightForeArm', childPos: [-0.25, 0, 0] },
-                { parent: hips, name: 'LeftUpLeg', pos: [0.1, -0.05, 0], childName: 'LeftLeg', childPos: [0, -0.4, 0] },
-                { parent: hips, name: 'RightUpLeg', pos: [-0.1, -0.05, 0], childName: 'RightLeg', childPos: [0, -0.4, 0] }
+                { parent: chest, name: 'LeftArm', pos: [0.12, 0.1, 0], childName: 'LeftForeArm', childPos: [0.2, 0, 0], hand: 'LeftHand', handPos: [0.18, 0, 0] },
+                { parent: chest, name: 'RightArm', pos: [-0.12, 0.1, 0], childName: 'RightForeArm', childPos: [-0.2, 0, 0], hand: 'RightHand', handPos: [-0.18, 0, 0] },
+                { parent: hips, name: 'LeftUpLeg', pos: [0.08, -0.05, 0], childName: 'LeftLeg', childPos: [0, -0.35, 0], foot: 'LeftFoot', footPos: [0, -0.35, 0.05] },
+                { parent: hips, name: 'RightUpLeg', pos: [-0.08, -0.05, 0], childName: 'RightLeg', childPos: [0, -0.35, 0], foot: 'RightFoot', footPos: [0, -0.35, 0.05] }
             ];
-            
+
             limbs.forEach(l => {
                 const pBone = new THREE.Bone();
                 pBone.name = l.name;
                 pBone.position.fromArray(l.pos);
                 l.parent.add(pBone);
                 resolvedBones[l.name] = pBone;
-                
+
                 const cBone = new THREE.Bone();
                 cBone.name = l.childName;
                 cBone.position.fromArray(l.childPos);
                 pBone.add(cBone);
                 resolvedBones[l.childName] = cBone;
+
+                if (l.hand) {
+                    const hBone = new THREE.Bone();
+                    hBone.name = l.hand;
+                    hBone.position.fromArray(l.handPos);
+                    cBone.add(hBone);
+                    resolvedBones[l.hand] = hBone;
+                }
+                if (l.foot) {
+                    const fBone = new THREE.Bone();
+                    fBone.name = l.foot;
+                    fBone.position.fromArray(l.footPos);
+                    cBone.add(fBone);
+                    resolvedBones[l.foot] = fBone;
+                }
             });
-            
-            const skeleton = new THREE.Skeleton([
-                hips, spine, neck,
-                resolvedBones.LeftArm, resolvedBones.LeftForeArm,
-                resolvedBones.RightArm, resolvedBones.RightForeArm,
-                resolvedBones.LeftUpLeg, resolvedBones.LeftLeg,
-                resolvedBones.RightUpLeg, resolvedBones.RightLeg
-            ]);
-            
+
+            // Structural representations
+            const skeleton = new THREE.Skeleton(Object.values(resolvedBones));
             skeleton.bones.forEach((bone) => {
-                const boxGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
-                const boxMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, roughness: 0.1, metalness: 0.8 });
-                const visualMesh = new THREE.Mesh(boxGeo, boxMat);
-                bone.add(visualMesh);
+                const boxGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0x14b8a6, roughness: 0.2, metalness: 0.8 });
+                const mesh = new THREE.Mesh(boxGeo, boxMat);
+                mesh.castShadow = true;
+                bone.add(mesh);
             });
-            
+
             scene.add(group);
             loadedModel = group;
-            cacheRestDirections();
+            cacheRestPoseDirections();
+            updateRetargetInfo();
+        }
+
+        // ==================== PHONE STREAMER INITIATION ====================
+        function startAsCamera() {
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('phone-view').classList.remove('hidden');
+            setStatus('offline', 'Source Mode');
+            peer = new Peer();
+            peer.on('error', (err) => { alert(err.message); resetApp(); });
+        }
+
+        async function connectToDisplay() {
+            const codeInput = document.getElementById('target-peer-code').value.trim().toUpperCase();
+            if (codeInput.length !== 5) { alert("Enter 5-digit Display code"); return; }
             
-            document.getElementById('model-info').innerHTML = `
-                <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin</div>
-                <div class="text-xs text-slate-500">Auto-generated skeleton. Ready to trace motion.</div>
-            `;
-        }
-
-        // ==================== MODEL LOADING ====================
-        function handleModelFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const url = URL.createObjectURL(file);
-            loadCustomModel(url, file.name);
-        }
-
-        function loadFromURLInput() {
-            const urlInput = document.getElementById('model-url').value.trim();
-            if (!urlInput) return;
-            loadCustomModel(urlInput, "External URL");
-        }
-
-        function loadCustomModel(url, nameString) {
-            setStatus('loading', 'Loading Model...');
-            modelLoadAttempts++;
-           
-            const isFBX = url.toLowerCase().includes('.fbx') || nameString.toLowerCase().includes('.fbx');
-            const loader = isFBX ? new THREE.FBXLoader() : new THREE.GLTFLoader();
-           
-            const loadCallback = (asset) => {
-                let model = isFBX ? asset : asset.scene;
-                
-                if (loadedModel) scene.remove(loadedModel);
-                resolvedBones = {};
-                loadedModel = model;
-                scene.add(loadedModel);
-                
-                // Automatic scale calculations to exactly match baseline procedural mannequin's height (~1.65 meters)
-                const box = new THREE.Box3().setFromObject(loadedModel);
-                const size = box.getSize(new THREE.Vector3());
-                const currentHeight = size.y;
-                if (currentHeight > 0.001) {
-                    const targetHeight = 1.65;
-                    const scaleFactor = targetHeight / currentHeight;
-                    loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-                }
-                
-                // Keep the model root origin pinned at standard baseline ground coords
-                loadedModel.position.set(0, 0, 0);
-                
-                // Enhanced bone mapping traverse passes
-                let boneCount = 0;
-                loadedModel.traverse((child) => {
-                    if (child.isBone || child.type === 'Bone') {
-                        boneCount++;
-                        let matched = false;
-                        for (const [key, aliases] of Object.entries(nameAliases)) {
-                            const childNameLower = child.name.toLowerCase();
-                            for (const alias of aliases) {
-                                const aliasLower = alias.toLowerCase();
-                                if (child.name === alias || childNameLower === aliasLower ||
-                                    childNameLower.includes(aliasLower) || aliasLower.includes(childNameLower)) {
-                                    if (!resolvedBones[key]) {
-                                        resolvedBones[key] = child;
-                                        matched = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (matched) break;
-                        }
-                    }
+            setStatus('loading', 'Initializing Media...');
+            try {
+                const facing = document.getElementById('camera-facing').value;
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: facing, width: { ideal: 480 }, height: { ideal: 640 }, frameRate: { ideal: 30 } },
+                    audio: false
                 });
-
-                // Failover Pass: More aggressive search
-                if (Object.keys(resolvedBones).length < 8) {
-                    loadedModel.traverse((child) => {
-                        if (child.isBone || child.type === 'Bone') {
-                            const name = child.name.toLowerCase();
-                            for (const [key, aliases] of Object.entries(nameAliases)) {
-                                if (resolvedBones[key]) continue;
-                                for (const alias of aliases) {
-                                    const aliasLower = alias.toLowerCase();
-                                    if (name.includes(aliasLower) || aliasLower.includes(name)) {
-                                        resolvedBones[key] = child;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Final Fallback: Direct lookup for vital root node
-                if (!resolvedBones.Hips) {
-                    let hipsCandidate = null;
-                    loadedModel.traverse((child) => {
-                        if ((child.isBone || child.type === 'Bone') && 
-                            (child.name.toLowerCase().includes('hip') || 
-                             child.name.toLowerCase().includes('pelvis') || 
-                             child.name.toLowerCase().includes('root'))) {
-                            hipsCandidate = child;
-                        }
-                    });
-                    if (hipsCandidate) resolvedBones.Hips = hipsCandidate;
-                }
-
-                cacheRestDirections();
                 
-                const boneCountStr = Object.keys(resolvedBones).length;
-                document.getElementById('model-info').innerHTML = `
-                    <div class="text-green-400 font-semibold">✓ Model Loaded Successfully</div>
-                    <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400">File:</span> ${nameString}</div>
-                    <div class="text-[10px] text-slate-400">Matched <span class="font-semibold text-teal-400">${boneCountStr}/15</span> mapped bones. (Total bones found: ${boneCount})</div>
-                `;
-                setStatus('connected', 'Skeletal Map Ready');
-
-                if (url.startsWith('blob:')) {
-                    URL.revokeObjectURL(url);
-                }
-            };
-
-            const errorCallback = (err) => {
-                console.error("Loader error:", err);
-                if (!isFBX && modelLoadAttempts < 3) {
-                    console.log("Retrying load request with alternative loader context...");
-                    const fbxLoader = new THREE.FBXLoader();
-                    fbxLoader.load(url, loadCallback, undefined, (fbxErr) => {
-                        console.error("Backup FBX loader call failed:", fbxErr);
-                        alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
-                        loadDefaultMannequin();
-                    });
-                } else {
-                    alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
-                    loadDefaultMannequin();
-                }
-
-                if (url.startsWith('blob:')) {
-                    URL.revokeObjectURL(url);
-                }
-            };
-
-            loader.load(url, loadCallback, undefined, errorCallback);
+                document.getElementById('local-video').srcObject = localStream;
+                document.getElementById('phone-input-container').classList.add('hidden');
+                document.getElementById('phone-stream-container').classList.remove('hidden');
+                
+                setStatus('loading', 'Opening Peer Channel...');
+                const call = peer.call("WM-V3-" + codeInput, localStream);
+                activeCall = call;
+                setStatus('connected', 'Streaming Online');
+            } catch (err) {
+                alert("Camera initialization rejected: " + err.message);
+                setStatus('offline', 'Capture Failed');
+            }
         }
 
-        function cacheRestDirections() {
-            BONE_RIG_LINKS.forEach((link) => {
-                const boneNode = resolvedBones[link.bone];
-                let childNode = resolvedBones[link.child];
-                if (!childNode && boneNode) {
-                    childNode = boneNode.children.find(c => c.isBone || c.type === 'Bone');
-                }
-                if (boneNode && childNode) {
-                    const dir = childNode.position.clone();
-                    if (dir.length() > 0.001) {
-                        link.defaultLocalDir = dir.normalize();
-                    } else {
-                        link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
-                    }
-                } else {
-                    // Positional guesses based on structural standard orientations
-                    if (link.bone.includes('Left') || link.bone.includes('left')) {
-                        link.defaultLocalDir = new THREE.Vector3(1, 0, 0);
-                    } else if (link.bone.includes('Right') || link.bone.includes('right')) {
-                        link.defaultLocalDir = new THREE.Vector3(-1, 0, 0);
-                    } else if (link.bone.includes('Leg') || link.bone.includes('leg')) {
-                        link.defaultLocalDir = new THREE.Vector3(0, -1, 0);
-                    } else {
-                        link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
-                    }
-                }
+        // ==================== PC DISPLAY INITIATION ====================
+        function startAsDisplay() {
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('display-view').classList.remove('hidden');
+            document.getElementById('control-sidebar').classList.remove('hidden');
+            setStatus('loading', 'Booting Pipeline...');
+
+            initThreeJS();
+            initMediaPipe();
+
+            const code = generateCode();
+            document.getElementById('display-peer-code').innerText = code;
+
+            peer = new Peer("WM-V3-" + code);
+            peer.on('open', () => setStatus('offline', 'Awaiting Source'));
+            peer.on('call', (call) => {
+                setStatus('loading', 'Connecting Call...');
+                call.answer();
+                activeCall = call;
+                call.on('stream', (stream) => {
+                    const videoEl = document.getElementById('remote-video');
+                    videoEl.srcObject = stream;
+                    document.getElementById('pip-container').classList.remove('hidden');
+                    videoEl.onloadedmetadata = () => {
+                        videoEl.play();
+                        startPoseEngine();
+                        setStatus('connected', 'Mocap Operational');
+                    };
+                });
             });
         }
 
-        // ==================== POSE PROCESSING ====================
-        function onPoseAnalysis(results) {
-            // Background subtraction green-screen implementation
-            const canvasEl = document.getElementById('pip-canvas');
-            if (canvasEl && results.segmentationMask && results.image) {
-                if (canvasEl.width !== results.image.width || canvasEl.height !== results.image.height) {
-                    canvasEl.width = results.image.width;
-                    canvasEl.height = results.image.height;
-                }
-                const canvasCtx = canvasEl.getContext('2d');
-                canvasCtx.save();
-                canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-                
-                // 1. Draw segmentation mask overlay
-                canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasEl.width, canvasEl.height);
-                
-                // 2. Crop to background-subtracted foreground via source-in blending
-                canvasCtx.globalCompositeOperation = 'source-in';
-                canvasCtx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
-                
-                // 3. Render bright chroma green background behind subject
-                canvasCtx.globalCompositeOperation = 'destination-over';
-                canvasCtx.fillStyle = '#00FF00'; // Standard Green Screen Chroma
-                canvasCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
-                
-                canvasCtx.restore();
+        function initMediaPipe() {
+            poseDetector = new Pose({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+            });
+            poseDetector.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            poseDetector.onResults(onPoseRawResults);
+        }
+
+        function startPoseEngine() {
+            const videoEl = document.getElementById('remote-video');
+            async function loop() {
+                if (!activeCall) return;
+                try {
+                    await poseDetector.send({ image: videoEl });
+                } catch (e) {}
+                videoEl.requestVideoFrameCallback ? videoEl.requestVideoFrameCallback(loop) : requestAnimationFrame(loop);
             }
+            videoEl.requestVideoFrameCallback ? videoEl.requestVideoFrameCallback(loop) : requestAnimationFrame(loop);
+        }
+
+        // ==================== CALIBRATION & HEIGHT SOLVING ====================
+        function triggerCalibration() {
+            calibrationData.calibrated = false;
+            document.getElementById('btn-calibrate').innerText = "⏱️ Standing by for T-Pose...";
+            document.getElementById('btn-calibrate').className = "w-full py-2 bg-yellow-600 text-xs font-bold rounded-lg";
+            
+            setTimeout(() => {
+                calibrationData.shouldCapture = true;
+            }, 2000);
+        }
+
+        function processCalibration(jointCoords) {
+            if (!jointCoords.leftAnkle || !jointCoords.leftHip || !jointCoords.leftShoulder || !jointCoords.leftWrist) return;
+            
+            // Proportional calculations
+            const userHeight = (jointCoords.leftAnkle.distanceTo(jointCoords.leftHip) + 
+                               jointCoords.leftHip.distanceTo(jointCoords.leftShoulder) + 0.25);
+            const armSpan = jointCoords.leftWrist.distanceTo(jointCoords.rightWrist || jointCoords.leftWrist) * 2;
+
+            calibrationData.userHeight = userHeight;
+            calibrationData.scaleFactor = 1.65 / userHeight;
+            calibrationData.calibrated = true;
+            calibrationData.shouldCapture = false;
+
+            document.getElementById('cal-height').innerText = `${calibrationData.scaleFactor.toFixed(2)}x`;
+            document.getElementById('cal-arms').innerText = `${armSpan.toFixed(2)} m`;
+            document.getElementById('btn-calibrate').innerText = "✓ Calibrated successfully";
+            document.getElementById('btn-calibrate').className = "w-full py-2 bg-green-600 text-xs font-bold rounded-lg";
+        }
+
+        // ==================== CORE MATH & RETARGETING FUSION ====================
+        function onPoseRawResults(results) {
+            metrics.fps = Math.round(1000 / (performance.now() - metrics.lastFrameTime));
+            metrics.lastFrameTime = performance.now();
+            document.getElementById('fps-val').innerText = metrics.fps;
+            document.getElementById('latency-val').innerText = activeCall ? "Low (RTC)" : "--";
+
+            // Process green screen / background mask subtraction
+            renderChromaPIP(results);
 
             if (!results.poseWorldLandmarks) return;
-            const worldLms = results.poseWorldLandmarks;
+            const rawLms = results.poseWorldLandmarks;
             const jointCoords = {};
-            const minVisibility = 0.5;
-            
+            const nowSec = performance.now() / 1000.0;
+
+            // Apply One Euro Filters & Confidence checks
             for (const [name, idx] of Object.entries(jointIndices)) {
-                const lm = worldLms[idx];
-                if (lm && lm.visibility > minVisibility) {
-                    jointCoords[name] = new THREE.Vector3(
-                        lm.x,         // Corrected: Removed negative to fix mirrored/inward rotation flips
-                        -lm.y + 0.95, // Keep standard upward-pointing Y axis
-                        -lm.z         // Depth value
-                    );
+                const lm = rawLms[idx];
+                if (lm && lm.visibility > 0.45) {
+                    let rawVec = new THREE.Vector3(lm.x, -lm.y + 0.95, -lm.z);
+                    
+                    if (!systemFilters[name]) {
+                        const cutoff = parseFloat(document.getElementById('slider-cutoff').value);
+                        const beta = parseFloat(document.getElementById('slider-beta').value);
+                        systemFilters[name] = new OneEuroFilter3D(cutoff, beta);
+                    }
+                    jointCoords[name] = systemFilters[name].filter(rawVec, nowSec);
                 }
             }
-            
+
+            // Occlusion Prediction injection
+            poseBuffer.add(jointCoords);
+            if (document.getElementById('toggle-prediction').checked) {
+                for (const name of Object.keys(jointIndices)) {
+                    if (!jointCoords[name] && poseBuffer.buffer.length > 2) {
+                        const predicted = poseBuffer.predict(jointIndices[name], 0.033);
+                        if (predicted) jointCoords[name] = predicted;
+                    }
+                }
+            }
+
+            // Derive intermediate nodes
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
             }
             if (jointCoords.leftHip && jointCoords.rightHip) {
                 jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
             }
-            if (jointCoords.leftAnkle) {
-                jointCoords.leftFoot = jointCoords.leftAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
+
+            if (calibrationData.shouldCapture) {
+                processCalibration(jointCoords);
             }
-            if (jointCoords.rightAnkle) {
-                jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
+
+            // Scale factor integration
+            const scale = calibrationData.calibrated ? calibrationData.scaleFactor : 1.0;
+
+            // 1. Head Rotation Solver (Yaw, Pitch, Roll)
+            if (resolvedBones.Head && jointCoords.nose && jointCoords.leftEye && jointCoords.rightEye) {
+                const headEuler = estimateHeadOrientation(jointCoords);
+                resolvedBones.Head.quaternion.slerp(new THREE.Quaternion().setFromEuler(headEuler), 0.25);
             }
-            
-            BONE_RIG_LINKS.forEach((link) => {
-                const boneNode = resolvedBones[link.bone];
-                const startPos = jointCoords[link.startJoint];
-                const endPos = jointCoords[link.endJoint];
+
+            // 2. Torso (Spine / Spine distribution solver)
+            if (jointCoords.spineBottom && jointCoords.spineTop) {
+                const spineDir = new THREE.Vector3().subVectors(jointCoords.spineTop, jointCoords.spineBottom).normalize();
+                const spineRot = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), spineDir);
                 
-                if (boneNode && startPos && endPos && link.defaultLocalDir) {
-                    const targetDirWorld = new THREE.Vector3().subVectors(endPos, startPos).normalize();
-                    const targetDirLocal = targetDirWorld.clone();
-                    if (boneNode.parent) {
-                        const parentWorldQuatInverse = new THREE.Quaternion();
-                        boneNode.parent.getWorldQuaternion(parentWorldQuatInverse);
-                        parentWorldQuatInverse.invert();
-                        targetDirLocal.applyQuaternion(parentWorldQuatInverse);
+                // Distribute Spine rotations (35% Spine, 25% Chest, 10% Neck)
+                if (resolvedBones.Spine) resolvedBones.Spine.quaternion.slerp(new THREE.Quaternion().slerp(spineRot, 0.35), 0.2);
+                if (resolvedBones.Chest) resolvedBones.Chest.quaternion.slerp(new THREE.Quaternion().slerp(spineRot, 0.25), 0.2);
+                if (resolvedBones.Neck) resolvedBones.Neck.quaternion.slerp(new THREE.Quaternion().slerp(spineRot, 0.10), 0.2);
+            }
+
+            // 3. Root & Pelvis Orientation solving
+            if (resolvedBones.Hips && jointCoords.spineBottom) {
+                const targetPos = jointCoords.spineBottom.clone().multiplyScalar(scale);
+                resolvedBones.Hips.position.lerp(targetPos, 0.2);
+
+                if (jointCoords.leftHip && jointCoords.rightHip) {
+                    const hipVec = new THREE.Vector3().subVectors(jointCoords.rightHip, jointCoords.leftHip).normalize();
+                    const hipRot = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), hipVec);
+                    resolvedBones.Hips.quaternion.slerp(hipRot, 0.25);
+                }
+            }
+
+            // 4. Arm / Leg joint mappings
+            BONE_RIG_LINKS.forEach((link) => {
+                const parentBone = resolvedBones[link.bone];
+                const startPt = jointCoords[link.startJoint];
+                const endPt = jointCoords[link.endJoint];
+
+                if (parentBone && startPt && endPt && link.defaultLocalDir) {
+                    const dirWorld = new THREE.Vector3().subVectors(endPt, startPt).normalize();
+                    const dirLocal = dirWorld.clone();
+                    if (parentBone.parent) {
+                        const parentWorldQuatInv = new THREE.Quaternion();
+                        parentBone.parent.getWorldQuaternion(parentWorldQuatInv);
+                        parentWorldQuatInv.invert();
+                        dirLocal.applyQuaternion(parentWorldQuatInv);
                     }
-                    const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
-                    boneNode.quaternion.slerp(rotationQuaternion, 0.25);
+                    const rotation = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, dirLocal);
+                    parentBone.quaternion.slerp(rotation, 0.25);
                 }
             });
-            
-            // Scaled positioning calculations for root bone translating 
-            if (resolvedBones.Hips && jointCoords.spineBottom) {
-                const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
-                const targetX = jointCoords.spineBottom.x / scaleY;
-                const targetY = jointCoords.spineBottom.y / scaleY;
-                const targetZ = jointCoords.spineBottom.z / scaleY;
-                
-                resolvedBones.Hips.position.y = THREE.MathUtils.lerp(resolvedBones.Hips.position.y, targetY, 0.2);
-                resolvedBones.Hips.position.x = THREE.MathUtils.lerp(resolvedBones.Hips.position.x, targetX, 0.2);
-                resolvedBones.Hips.position.z = THREE.MathUtils.lerp(resolvedBones.Hips.position.z, targetZ, 0.2);
+
+            // 5. FABRIK Foot Placement and Locking solver
+            if (document.getElementById('toggle-ik').checked) {
+                applyFootLocking(jointCoords, scale);
             }
         }
 
+        function estimateHeadOrientation(joints) {
+            const dx = joints.rightEye.x - joints.leftEye.x;
+            const dy = joints.rightEye.y - joints.leftEye.y;
+            const roll = Math.atan2(dy, dx);
+            
+            const distL = joints.nose.distanceTo(joints.leftEye);
+            const distR = joints.nose.distanceTo(joints.rightEye);
+            const yaw = (distL - distR) / (distL + distR + 1e-5) * 1.5;
+            
+            const eyeMidY = (joints.leftEye.y + joints.rightEye.y) * 0.5;
+            const pitch = (joints.nose.y - eyeMidY) * 2.0;
+
+            return new THREE.Euler(pitch, yaw, roll, 'YXZ');
+        }
+
+        function applyFootLocking(joints, scale) {
+            const floorThreshold = 0.05;
+            
+            if (joints.leftAnkle && resolvedBones.LeftUpLeg && resolvedBones.LeftLeg && resolvedBones.LeftFoot) {
+                const lAnklePos = joints.leftAnkle.clone().multiplyScalar(scale);
+                if (lAnklePos.y < floorThreshold) {
+                    lAnklePos.y = 0; // Snap to ground plane
+                    const solver = new FABRIKSolver(
+                        [resolvedBones.LeftUpLeg, resolvedBones.LeftLeg, resolvedBones.LeftFoot], 
+                        lAnklePos
+                    );
+                    solver.solve();
+                }
+            }
+
+            if (joints.rightAnkle && resolvedBones.RightUpLeg && resolvedBones.RightLeg && resolvedBones.RightFoot) {
+                const rAnklePos = joints.rightAnkle.clone().multiplyScalar(scale);
+                if (rAnklePos.y < floorThreshold) {
+                    rAnklePos.y = 0;
+                    const solver = new FABRIKSolver(
+                        [resolvedBones.RightUpLeg, resolvedBones.RightLeg, resolvedBones.RightFoot], 
+                        rAnklePos
+                    );
+                    solver.solve();
+                }
+            }
+        }
+
+        // ==================== CHROMA KEY GREEN SCREEN RENDERER ====================
+        function renderChromaPIP(results) {
+            const canvas = document.getElementById('pip-canvas');
+            if (!canvas || !results.segmentationMask || !results.image) return;
+
+            if (canvas.width !== results.image.width) {
+                canvas.width = results.image.width;
+                canvas.height = results.image.height;
+            }
+
+            const ctx = canvas.getContext('2d');
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Crop to visible segmentation mask
+            ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation = 'source-in';
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw Virtual Chroma green color behind user
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = '#00FF00';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
+
+        // ==================== RENDERING LOOP ====================
         function animate() {
             animationFrameId = requestAnimationFrame(animate);
             if (controls) controls.update();
@@ -773,9 +1025,76 @@
             }
         }
 
-        // ==================== DECONSTRUCTION & RESET ====================
+        // ==================== UI CONTROLS & BINDINGS ====================
+        function updateFilters() {
+            const cutoff = parseFloat(document.getElementById('slider-cutoff').value);
+            const beta = parseFloat(document.getElementById('slider-beta').value);
+            
+            document.getElementById('cutoff-label').innerText = `${cutoff.toFixed(1)} Hz`;
+            document.getElementById('beta-label').innerText = beta.toFixed(3);
+
+            for (const key of Object.keys(systemFilters)) {
+                systemFilters[key].xFilter.mincutoff = cutoff;
+                systemFilters[key].xFilter.beta = beta;
+                systemFilters[key].yFilter.mincutoff = cutoff;
+                systemFilters[key].yFilter.beta = beta;
+                systemFilters[key].zFilter.mincutoff = cutoff;
+                systemFilters[key].zFilter.beta = beta;
+            }
+        }
+
+        function toggleWireframe() {
+            const value = document.getElementById('toggle-wireframe').checked;
+            if (loadedModel) {
+                loadedModel.traverse((child) => {
+                    if (child.isMesh) child.material.wireframe = value;
+                });
+            }
+        }
+
+        function updateLightSettings() {
+            const value = parseFloat(document.getElementById('slider-light').value);
+            if (lightKey) lightKey.intensity = value;
+        }
+
+        // ==================== EXTERNAL MODEL IMPORTER ====================
+        function handleModelFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            setStatus('loading', 'Importing Model...');
+            const url = URL.createObjectURL(file);
+            const isFBX = file.name.toLowerCase().includes('.fbx');
+            const loader = isFBX ? new THREE.FBXLoader() : new THREE.GLTFLoader();
+
+            loader.load(url, (asset) => {
+                const model = isFBX ? asset : asset.scene;
+                
+                if (loadedModel) scene.remove(loadedModel);
+                loadedModel = model;
+                scene.add(loadedModel);
+
+                // Auto bounding scale normalization
+                const box = new THREE.Box3().setFromObject(loadedModel);
+                const size = box.getSize(new THREE.Vector3());
+                if (size.y > 0.01) {
+                    const scaleFactor = 1.65 / size.y;
+                    loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                }
+                loadedModel.position.set(0, 0, 0);
+
+                mapSkeleton(loadedModel);
+                setStatus('connected', 'Skeletal Map Ready');
+                URL.revokeObjectURL(url);
+            }, undefined, (err) => {
+                alert("Model parsing failed. Ensure skeleton contains standardized joints.");
+                loadDefaultMannequin();
+                setStatus('connected', 'Default Loaded');
+            });
+        }
+
+        // ==================== APP DECONSTRUCTION ====================
         function resetApp() {
-            processingLoopActive = false;
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
@@ -788,33 +1107,37 @@
                 peer.destroy();
                 peer = null;
             }
-            
-            disposeThreeJS();
-            window.removeEventListener('resize', onWindowResize);
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
 
-            // Revert DOM states
-            setupView.classList.remove('hidden');
-            phoneView.classList.add('hidden');
-            displayView.classList.add('hidden');
-            document.getElementById('pip-container').classList.add('hidden');
+            document.getElementById('setup-view').classList.remove('hidden');
+            document.getElementById('phone-view').classList.add('hidden');
+            document.getElementById('display-view').classList.add('hidden');
+            document.getElementById('control-sidebar').classList.add('hidden');
             document.getElementById('phone-input-container').classList.remove('hidden');
             document.getElementById('phone-stream-container').classList.add('hidden');
-            
+            document.getElementById('pip-container').classList.add('hidden');
+
             const container = document.getElementById('canvas-container');
             while (container.firstChild) {
                 container.removeChild(container.firstChild);
             }
-            
+
+            resolvedBones = {};
+            systemFilters = {};
+            calibrationData.calibrated = false;
+
             setStatus('offline', 'Offline');
         }
 
-        // Global context mappings
         window.startAsDisplay = startAsDisplay;
         window.startAsCamera = startAsCamera;
         window.connectToDisplay = connectToDisplay;
         window.resetApp = resetApp;
         window.handleModelFile = handleModelFile;
-        window.loadFromURLInput = loadFromURLInput;
+        window.triggerCalibration = triggerCalibration;
     </script>
 </body>
 </html>
