@@ -593,11 +593,6 @@
                 minTrackingConfidence: 0.5
             });
             poseDetector.onResults(onPoseAnalysis);
-            poseDetector.initialize().then(() => {
-                console.log("MediaPipe initialized successfully");
-            }).catch(err => {
-                console.error("MediaPipe init failed:", err);
-            });
         }
 
         function startFrameProcessing() {
@@ -914,7 +909,7 @@
             // Background subtraction canvas mapping is omitted in this build.
             // Raw video stream is rendered securely in the PiP container instead to guarantee cross-device performance.
 
-            if (!results.poseWorldLandmarks) return;
+            if (!results || !results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
             const minVisibility = 0.5;
