@@ -28,13 +28,8 @@
     <style>
         .transition-all { transition: all 0.3s ease; }
         video { transform: scaleX(-1); }
-        #remote-video { transform: scaleX(1); }
+        #remote-video { transform: scaleX(-1); } /* Mirrored reflection for intuitive mirror-like feedback */
         #local-video { transform: scaleX(-1); }
-        /* GPU Accelerated Sepia/Cyan Hologram Filter */
-        #pip-canvas { 
-            transform: scaleX(-1); 
-            filter: sepia(1) saturate(600%) hue-rotate(135deg) brightness(1.2) contrast(1.1);
-        } 
         @media (max-width: 640px) {
             #display-dashboard { max-width: 92vw; left: 4vw; top: 12px; }
             #pip-container { width: 138px; height: 104px; bottom: 16px; right: 16px; }
@@ -214,9 +209,8 @@
 
             <!-- Supreme Hologram PiP -->
             <div id="pip-container" class="hidden absolute bottom-6 right-6 w-52 h-40 bg-black rounded-3xl overflow-hidden border border-teal-500/30 shadow-2xl z-40">
-                <video id="remote-video" autoplay playsinline muted class="hidden"></video>
-                <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
-                <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded font-mono">📷 HOLOGRAM</div>
+                <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded font-mono">📷 PHONE FEED</div>
             </div>
         </div>
     </main>
@@ -227,7 +221,7 @@
         let scene = null, camera = null, renderer = null, controls = null, loadedModel = null, resolvedBones = {};
         let processingLoopActive = false, animationFrameId = null;
         let modelLoadAttempts = 0;
-        let isProcessingFrame = false; // Processing thread lock to eliminate pipeline lags
+        let lastProcessed = 0;
 
         // Interactive Calibration States
         let calibrationState = 0; 
@@ -547,7 +541,6 @@
             poseDetector.setOptions({
                 modelComplexity: 1,
                 smoothLandmarks: true,
-                enableSegmentation: true,
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
@@ -561,16 +554,16 @@
            
             async function processFrame() {
                 if (!processingLoopActive) return;
-                // Add pipeline synchronization lock to eliminate single-thread rendering freezes
-                if (videoElement.readyState >= 2 && !videoElement.paused && !isProcessingFrame) {
-                    isProcessingFrame = true;
-                    try {
-                        await poseDetector.send({ image: videoElement });
-                    } catch (e) {
-                        // Suppressed to maintain execution speed
-                    } finally {
-                        isProcessingFrame = false;
+                const now = Date.now();
+                if (now - lastProcessed > 33) { // ~30 FPS throttling limit to avoid loop stacking
+                    if (videoElement.readyState >= 2 && !videoElement.paused) {
+                        try {
+                            await poseDetector.send({ image: videoElement });
+                        } catch (e) {
+                            // Suppressed to maintain execution speed
+                        }
                     }
+                    lastProcessed = now;
                 }
                 requestAnimationFrame(processFrame);
             }
@@ -864,27 +857,8 @@
 
         // ==================== POSE RECONSTRUCTION PIPELINE ====================
         function onPoseAnalysis(results) {
-            // GPU-Accelerated WebRTC background subtraction PiP visualizer
-            const canvasEl = document.getElementById('pip-canvas');
-            if (canvasEl && results.segmentationMask && results.image) {
-                const renderW = 208;
-                const renderH = 160;
-                if (canvasEl.width !== renderW || canvasEl.height !== renderH) {
-                    canvasEl.width = renderW;
-                    canvasEl.height = renderH;
-                }
-                const canvasCtx = canvasEl.getContext('2d');
-                canvasCtx.save();
-                canvasCtx.clearRect(0, 0, renderW, renderH);
-                
-                // 1. Draw segmentation mask overlay
-                canvasCtx.drawImage(results.segmentationMask, 0, 0, renderW, renderH);
-                
-                // 2. Crop to background-subtracted foreground via source-in blending
-                canvasCtx.globalCompositeOperation = 'source-in';
-                canvasCtx.drawImage(results.image, 0, 0, renderW, renderH);
-                canvasCtx.restore();
-            }
+            // Background subtraction canvas mapping is omitted in this build.
+            // Raw video stream is rendered securely in the PiP container instead to guarantee cross-device performance.
 
             if (!results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
