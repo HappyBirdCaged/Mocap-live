@@ -28,8 +28,9 @@
     <style>
         .transition-all { transition: all 0.3s ease; }
         video { transform: scaleX(-1); }
-        #remote-video { transform: scaleX(-1); } /* Mirrored reflection for intuitive mirror-like feedback */
+        #remote-video { transform: scaleX(1); }
         #local-video { transform: scaleX(-1); }
+        #pip-canvas { transform: scaleX(-1); } /* Mirror reflection for intuitive user feedback */
         @media (max-width: 640px) {
             #display-dashboard { max-width: 92vw; left: 4vw; top: 12px; }
             #pip-container { width: 138px; height: 104px; bottom: 16px; right: 16px; }
@@ -75,7 +76,7 @@
                 </div>
                 <button onclick="startAsDisplay()" class="w-full p-6 bg-teal-600 hover:bg-teal-500 rounded-2xl font-semibold text-xl shadow-xl shadow-teal-900/30 transition-all duration-200">
                     🖥️ Display Screen (PC)
-                    <span class="block text-xs font-normal text-teal-100 mt-1">Handles 3D visualization and processing</span>
+                    <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models and handles motion analysis</span>
                 </button>
                 <div class="text-slate-500 font-mono text-sm">OR</div>
                 <button onclick="startAsCamera()" class="w-full p-6 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-2xl font-semibold text-xl transition-all duration-200">
@@ -209,7 +210,8 @@
 
             <!-- Supreme Hologram PiP -->
             <div id="pip-container" class="hidden absolute bottom-6 right-6 w-52 h-40 bg-black rounded-3xl overflow-hidden border border-teal-500/30 shadow-2xl z-40">
-                <video id="remote-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <video id="remote-video" autoplay playsinline muted class="hidden"></video>
+                <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
                 <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded font-mono">📷 PHONE FEED</div>
             </div>
         </div>
@@ -228,14 +230,10 @@
         let customBoneLengths = {};
         let latestJointCoords = null;
 
-        // Jolt Suppression Variables
-        let lastHipsPos = new THREE.Vector3();
-        let joltCooldown = 0, transitionBlend = 1.0;
-
         // Audio Context API Nodes
         let audioCtx = null, audioSource = null, delayNode = null, delayGainNode = null, reverbNode = null, reverbGainNode = null, dryGainNode = null;
 
-        // Bone Aliases dictionary for multi-pass standard mapping (Matches older robust version)
+        // Bone Aliases dictionary for multi-pass standard mapping (Matches working older version)
         const nameAliases = {
             Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root', 'mixamorig:Hips', 'hip', 'pelvis'],
             Spine: ['mixamorigSpine', 'Spine', 'bip_spine', 'Spine1', 'Chest', 'Spine2', 'mixamorig:Spine', 'spine'],
@@ -327,22 +325,10 @@
             document.getElementById('setup-view').classList.add('hidden');
             document.getElementById('phone-view').classList.remove('hidden');
             setStatus('offline', 'Source Mode');
-            peer = new Peer({
-                debug: 3,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
+            peer = new Peer();
             peer.on('error', (err) => {
-                console.error("PeerJS Error:", err);
-                alert("Connection failed: " + err.message + ". Try refreshing or using HTTPS/localhost.");
+                alert("Connection failed: " + err.message);
                 resetApp();
-            });
-            peer.on('open', (id) => {
-                console.log("Phone Peer opened with ID:", id);
             });
         }
 
@@ -352,7 +338,7 @@
                 alert("Please enter the 5-digit code shown on the display PC.");
                 return;
             }
-            setStatus('loading', 'Accessing Stream...');
+            setStatus('loading', 'Accessing Camera...');
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
@@ -368,28 +354,12 @@
                
                 setStatus('loading', 'Connecting...');
                 const targetPeerId = "WM-MOCAP-" + codeInput;
-                console.log("Initiating call to:", targetPeerId);
                 const call = peer.call(targetPeerId, localStream);
                 activeCall = call;
-                
-                call.on('open', () => {
-                    console.log("Call connection opened");
-                });
-                
-                call.on('stream', (remoteStream) => {
-                    console.log("Received stream back (if any)");
-                });
-                
                 call.on('close', () => {
-                    console.log("Call closed");
                     alert("Display connection lost.");
                     resetApp();
                 });
-                
-                call.on('error', (err) => {
-                    console.error("Call error on phone:", err);
-                });
-                
                 setStatus('connected', 'Live Streaming');
             } catch (err) {
                 console.error(err);
@@ -509,8 +479,8 @@
 
         // ==================== DISPLAY MODE ====================
         function startAsDisplay() {
-            document.getElementById('setup-view').classList.add('hidden');
-            document.getElementById('display-view').classList.remove('hidden');
+            setupView.classList.add('hidden');
+            displayView.classList.remove('hidden');
             setStatus('loading', 'Initializing...');
             
             initThreeJS();
@@ -520,75 +490,42 @@
             peerId = "WM-MOCAP-" + pinCode;
             document.getElementById('display-peer-code').innerText = pinCode;
             
-            peer = new Peer(peerId, {
-                debug: 3,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
-            });
-            peer.on('open', (id) => {
-                console.log("Display Peer opened with ID:", id);
+            peer = new Peer(peerId);
+            peer.on('open', () => {
                 setStatus('offline', 'Awaiting Source...');
             });
-            peer.on('error', (err) => {
-                console.error("Display PeerJS Error:", err);
-                setStatus('offline', 'Peer Error');
-            });
             peer.on('call', (call) => {
-                console.log("Incoming call received from:", call.peer);
                 setStatus('loading', 'Opening Stream...');
-                call.answer();  // Answer without local stream (receiver)
+                call.answer();
                 activeCall = call;
-                
                 call.on('stream', (remoteStream) => {
-                    console.log("Remote stream received!");
                     const videoEl = document.getElementById('remote-video');
                     document.getElementById('pip-container').classList.remove('hidden');
                     videoEl.srcObject = remoteStream;
-
-                    const playAndInit = () => {
-                        console.log("Attempting to play remote video");
-                        videoEl.play().then(() => {
-                            console.log("Video playing successfully");
-                            setupAudioDSP(remoteStream);
-                            startFrameProcessing();
-                            setStatus('connected', 'Mocap & DSP Active');
-                        }).catch(e => {
-                            console.warn("Autoplay blocked:", e);
-                            // Fallback: user interaction will trigger
-                        });
+                    videoEl.onloadedmetadata = () => {
+                        videoEl.play();
+                        
+                        setupAudioDSP(remoteStream);
+                        
+                        startFrameProcessing();
+                        setStatus('connected', 'Mocap Active');
                     };
-
-                    videoEl.onloadedmetadata = playAndInit;
-                    videoEl.onloadeddata = playAndInit;
-                    videoEl.oncanplaythrough = playAndInit;
-
-                    setTimeout(playAndInit, 300);
                 });
-                
                 call.on('close', () => {
-                    console.log("Call closed");
                     document.getElementById('pip-container').classList.add('hidden');
                     setStatus('offline', 'Disconnected');
-                });
-                
-                call.on('error', (err) => {
-                    console.error("Call error:", err);
                 });
             });
         }
 
         function initMediaPipe() {
-            console.log("Initializing MediaPipe Pose");
             poseDetector = new Pose({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
             });
             poseDetector.setOptions({
                 modelComplexity: 1,
                 smoothLandmarks: true,
+                enableSegmentation: true, // Enables the alpha segmentation mask for background removal
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
@@ -601,15 +538,13 @@
             const videoElement = document.getElementById('remote-video');
            
             async function processFrame() {
-                if (!processingLoopActive || !poseDetector) return;
+                if (!processingLoopActive) return;
                 const now = Date.now();
-                if (now - lastProcessed > 33) { // ~30 FPS
-                    if (videoElement.readyState >= 2 && !videoElement.paused) {
+                if (now - lastProcessed > 40) { // Targeting smooth ~25 FPS mapping performance
+                    if (videoElement.readyState >= 2) {
                         try {
                             await poseDetector.send({ image: videoElement });
-                        } catch (e) {
-                            console.warn("Pose send error:", e);
-                        }
+                        } catch (e) {}
                     }
                     lastProcessed = now;
                 }
@@ -618,10 +553,10 @@
             processFrame();
         }
 
-        // ==================== THREE.JS SETUP & FALLBACK MANNEQUIN ====================
+        // ==================== THREE.JS SETUP & MAPPING ====================
         function initThreeJS() {
             const container = document.getElementById('canvas-container');
-            disposeThreeJS();
+            disposeThreeJS(); // Safe reset before initialization
            
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0f111a);
@@ -672,7 +607,6 @@
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         }
 
         function loadDefaultMannequin() {
@@ -743,11 +677,11 @@
             
             document.getElementById('model-info').innerHTML = `
                 <div><span class="font-semibold text-slate-300">Active Rig:</span> Basic Procedural Mannequin</div>
-                <div class="text-xs text-slate-500 font-mono">Auto-generated skeleton hierarchy.</div>
+                <div class="text-xs text-slate-500 font-mono">Auto-generated skeleton. Ready to trace motion.</div>
             `;
         }
 
-        // ==================== MODEL PARSING & MATCHING ====================
+        // ==================== MODEL LOADING ====================
         function handleModelFile(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -776,6 +710,7 @@
                 loadedModel = model;
                 scene.add(loadedModel);
                 
+                // Automatic scale calculations to exactly match baseline procedural mannequin's height (~1.65 meters)
                 const box = new THREE.Box3().setFromObject(loadedModel);
                 const size = box.getSize(new THREE.Vector3());
                 const currentHeight = size.y;
@@ -784,8 +719,11 @@
                     const scaleFactor = targetHeight / currentHeight;
                     loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
                 }
+                
+                // Keep the model root origin pinned at standard baseline ground coords
                 loadedModel.position.set(0, 0, 0);
                 
+                // Enhanced bone mapping traverse passes
                 let boneCount = 0;
                 loadedModel.traverse((child) => {
                     if (child.isBone || child.type === 'Bone') {
@@ -809,6 +747,7 @@
                     }
                 });
 
+                // Failover Pass: More aggressive search
                 if (Object.keys(resolvedBones).length < 8) {
                     loadedModel.traverse((child) => {
                         if (child.isBone || child.type === 'Bone') {
@@ -827,6 +766,7 @@
                     });
                 }
 
+                // Final Fallback: Direct lookup for vital root node
                 if (!resolvedBones.Hips) {
                     let hipsCandidate = null;
                     loadedModel.traverse((child) => {
@@ -845,8 +785,8 @@
                 const boneCountStr = Object.keys(resolvedBones).length;
                 document.getElementById('model-info').innerHTML = `
                     <div class="text-green-400 font-semibold">✓ Model Loaded Successfully</div>
-                    <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400 font-mono">File:</span> ${nameString}</div>
-                    <div class="text-[10px] text-slate-400 font-mono">Matched ${boneCountStr}/15 bones. (Total bones: ${boneCount})</div>
+                    <div class="text-[10px] text-slate-500 truncate"><span class="font-semibold text-slate-400">File:</span> ${nameString}</div>
+                    <div class="text-[10px] text-slate-400 font-mono">Matched <span class="font-semibold text-teal-400">${boneCountStr}/15</span> mapped bones. (Total bones found: ${boneCount})</div>
                 `;
                 setStatus('connected', 'Skeletal Map Ready');
 
@@ -856,18 +796,20 @@
             };
 
             const errorCallback = (err) => {
-                console.error("Loader failed:", err);
+                console.error("Loader error:", err);
                 if (!isFBX && modelLoadAttempts < 3) {
+                    console.log("Retrying load request with alternative loader context...");
                     const fbxLoader = new THREE.FBXLoader();
                     fbxLoader.load(url, loadCallback, undefined, (fbxErr) => {
-                        console.error("Fallback FBX load failed:", fbxErr);
-                        alert("Could not load model structure. Ensure it is a valid, rigged glb/gltf/fbx skeleton.");
+                        console.error("Backup FBX loader call failed:", fbxErr);
+                        alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
                         loadDefaultMannequin();
                     });
                 } else {
-                    alert("Could not load model structure. Ensure it is a valid, rigged glb/gltf/fbx skeleton.");
+                    alert("Could not parse the file. Ensure it contains a standardized, rigged skeleton (GLTF/GLB/FBX).");
                     loadDefaultMannequin();
                 }
+
                 if (url.startsWith('blob:')) {
                     URL.revokeObjectURL(url);
                 }
@@ -891,6 +833,7 @@
                         link.defaultLocalDir = new THREE.Vector3(0, 1, 0);
                     }
                 } else {
+                    // Positional guesses based on structural standard orientations
                     if (link.bone.includes('Left') || link.bone.includes('left')) {
                         link.defaultLocalDir = new THREE.Vector3(1, 0, 0);
                     } else if (link.bone.includes('Right') || link.bone.includes('right')) {
@@ -904,29 +847,50 @@
             });
         }
 
-        // ==================== POSE RECONSTRUCTION PIPELINE ====================
+        // ==================== POSE PROCESSING ====================
         function onPoseAnalysis(results) {
-            // Background subtraction canvas mapping is omitted in this build.
-            // Raw video stream is rendered securely in the PiP container instead to guarantee cross-device performance.
+            // Background subtraction green-screen implementation
+            const canvasEl = document.getElementById('pip-canvas');
+            if (canvasEl && results.segmentationMask && results.image) {
+                if (canvasEl.width !== results.image.width || canvasEl.height !== results.image.height) {
+                    canvasEl.width = results.image.width;
+                    canvasEl.height = results.image.height;
+                }
+                const canvasCtx = canvasEl.getContext('2d');
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+                
+                // 1. Draw segmentation mask overlay
+                canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasEl.width, canvasEl.height);
+                
+                // 2. Crop to background-subtracted foreground via source-in blending
+                canvasCtx.globalCompositeOperation = 'source-in';
+                canvasCtx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+                
+                // 3. Render bright chroma green background behind subject
+                canvasCtx.globalCompositeOperation = 'destination-over';
+                canvasCtx.fillStyle = '#00FF00'; // Standard Green Screen Chroma
+                canvasCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+                
+                canvasCtx.restore();
+            }
 
-            if (!results || !results.poseWorldLandmarks) return;
+            if (!results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
             const minVisibility = 0.5;
             
-            // Core coordinate projection using the stable, working math from older builds
             for (const [name, idx] of Object.entries(jointIndices)) {
                 const lm = worldLms[idx];
                 if (lm && lm.visibility > minVisibility) {
                     jointCoords[name] = new THREE.Vector3(
-                        -lm.x,        // Stable projection direction from older working build
-                        -lm.y + 0.95, // Upward Y offset
-                        -lm.z         // Z matching depth
+                        lm.x,         // Corrected: Removed negative to fix mirrored/inward rotation flips
+                        -lm.y + 0.95, // Keep standard upward-pointing Y axis
+                        -lm.z         // Depth value
                     );
                 }
             }
             
-            // Reconstruct torso midpoints
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
             }
@@ -939,21 +903,7 @@
             if (jointCoords.rightAnkle) {
                 jointCoords.rightFoot = jointCoords.rightAnkle.clone().add(new THREE.Vector3(0, -0.08, 0.05));
             }
-
-            latestJointCoords = jointCoords;
-
-            // Tracking Jolt Suppressor: Detect and skip coordinate jumps > 0.4 units
-            const currentHipsPos = jointCoords.spineBottom;
-            if (currentHipsPos && lastHipsPos.lengthSq() > 0) {
-                const stepDisplacement = currentHipsPos.distanceTo(lastHipsPos);
-                if (stepDisplacement > 0.4 && joltCooldown === 0) { 
-                    triggerJoltReset();
-                }
-            }
-            if (currentHipsPos) lastHipsPos.copy(currentHipsPos);
-            if (joltCooldown > 0) joltCooldown--;
             
-            // Stable, tested joint orientation mapping from working build
             BONE_RIG_LINKS.forEach((link) => {
                 const boneNode = resolvedBones[link.bone];
                 const startPos = jointCoords[link.startJoint];
@@ -969,22 +919,11 @@
                         targetDirLocal.applyQuaternion(parentWorldQuatInverse);
                     }
                     const rotationQuaternion = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, targetDirLocal);
-                    
-                    // Smooth slerp transition
-                    const blendedQuat = new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), rotationQuaternion, transitionBlend);
-                    boneNode.quaternion.slerp(blendedQuat, 0.25);
-                    
-                    // Optional clamping applied on Forearm/Leg hinge nodes to maintain standard humanoid posture
-                    if (link.bone.includes('ForeArm') || link.bone.includes('Leg')) {
-                        clampJointRotation(link.bone, boneNode.quaternion);
-                    }
-                } else if (boneNode && (!startPos || !endPos)) {
-                    // Smoothly return joint to rest orientation if visibility drops
-                    boneNode.quaternion.slerp(new THREE.Quaternion(), 0.1);
+                    boneNode.quaternion.slerp(rotationQuaternion, 0.25);
                 }
             });
-
-            // Root translation mapping based strictly on hip translation calculations (keeps legs aligned)
+            
+            // Scaled positioning calculations for root bone translating 
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const scaleY = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 const targetX = jointCoords.spineBottom.x / scaleY;
@@ -1000,17 +939,12 @@
         function animate() {
             animationFrameId = requestAnimationFrame(animate);
             if (controls) controls.update();
-            
-            if (transitionBlend < 1.0) {
-                transitionBlend = Math.min(1.0, transitionBlend + 0.03); 
-            }
-            
             if (renderer && scene && camera) {
                 renderer.render(scene, camera);
             }
         }
 
-        // ==================== CLEAN DESTRUCTION ====================
+        // ==================== DECONSTRUCTION & RESET ====================
         function resetApp() {
             processingLoopActive = false;
             if (localStream) {
@@ -1025,17 +959,14 @@
                 peer.destroy();
                 peer = null;
             }
-            if (audioCtx) {
-                audioCtx.close();
-                audioCtx = null;
-            }
             
             disposeThreeJS();
             window.removeEventListener('resize', onWindowResize);
 
-            document.getElementById('setup-view').classList.remove('hidden');
-            document.getElementById('phone-view').classList.add('hidden');
-            document.getElementById('display-view').classList.add('hidden');
+            // Revert DOM states
+            setupView.classList.remove('hidden');
+            phoneView.classList.add('hidden');
+            displayView.classList.add('hidden');
             document.getElementById('pip-container').classList.add('hidden');
             document.getElementById('phone-input-container').classList.remove('hidden');
             document.getElementById('phone-stream-container').classList.add('hidden');
@@ -1048,9 +979,8 @@
             setStatus('offline', 'Offline');
         }
 
-        // Missing function implementations for UI buttons
+        // Global context mappings (Adding missing stubs to prevent layout errors)
         function hardResetPose() {
-            console.log("Hard reset pose");
             if (resolvedBones.Hips) {
                 resolvedBones.Hips.position.set(0, 1.0, 0);
                 resolvedBones.Hips.quaternion.set(0, 0, 0, 1);
@@ -1061,49 +991,23 @@
                     bone.quaternion.set(0, 0, 0, 1);
                 }
             });
-            lastHipsPos.set(0, 0, 0);
-            transitionBlend = 0.0;
         }
 
         function toggleCalibration() {
             const panel = document.getElementById('calibration-panel');
-            panel.classList.toggle('hidden');
-            calibrationState = 0;
-            document.getElementById('calibration-prompt').innerText = 'Step 1: Stand straight in a neutral T-Pose.';
+            if (panel) panel.classList.toggle('hidden');
         }
 
         function cancelCalibration() {
-            document.getElementById('calibration-panel').classList.add('hidden');
+            const panel = document.getElementById('calibration-panel');
+            if (panel) panel.classList.add('hidden');
         }
 
         function confirmCalibrationStep() {
-            // Basic placeholder - can be expanded for custom bone length calc
-            console.log("Calibration step:", calibrationState);
-            if (calibrationState === 0 && latestJointCoords) {
-                // Store current pose as rest
-                customBoneLengths = {};
-                alert("Neutral T-Pose registered! (Advanced calibration stub)");
-            }
-            calibrationState++;
-            document.getElementById('calibration-panel').classList.add('hidden');
+            alert("Calibration step confirmed!");
+            cancelCalibration();
         }
 
-        function triggerJoltReset() {
-            console.log("Jolt detected, resetting");
-            joltCooldown = 30; // frames
-            transitionBlend = 0.0;
-        }
-
-        function clampJointRotation(boneName, quat) {
-            // Simple clamp for elbows/knees to prevent unnatural bends
-            const euler = new THREE.Euler().setFromQuaternion(quat);
-            if (boneName.includes('ForeArm') || boneName.includes('Leg')) {
-                euler.x = Math.max(-1.5, Math.min(1.5, euler.x)); // limit rotation
-            }
-            quat.setFromEuler(euler);
-        }
-
-        // Global exports
         window.startAsDisplay = startAsDisplay;
         window.startAsCamera = startAsCamera;
         window.connectToDisplay = connectToDisplay;
