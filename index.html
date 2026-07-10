@@ -17,9 +17,6 @@
     
     <!-- PeerJS for WebRTC -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    
-    <!-- MediaPipe Pose -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 
     <style>
         .transition-all { transition: all 0.3s ease; }
@@ -62,7 +59,7 @@
             <div id="perf-monitor" class="hidden sm:flex items-center gap-3 text-xs text-slate-400 font-mono">
                 <div>FPS: <span id="fps-val" class="text-teal-400 font-bold">--</span></div>
                 <div class="w-px h-3 bg-slate-800"></div>
-                <div>Latency: <span id="latency-val" class="text-teal-400 font-bold">-- ms</span></div>
+                <div>Source: <span id="source-val" class="text-teal-400 font-bold">Local Host</span></div>
             </div>
             
             <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
@@ -74,33 +71,29 @@
     <!-- MAIN INTERACTIVE VIEWPORT -->
     <main class="relative flex-grow w-full overflow-hidden flex flex-row">
         
-        <!-- SIDEBAR CONTROLS (Only visible on displays/PC mode) -->
+        <!-- SIDEBAR CONTROLS -->
         <aside id="control-sidebar" class="hidden lg:flex flex-col w-80 bg-slate-900 border-r border-slate-800 overflow-y-auto no-scrollbar shrink-0 p-5 space-y-6 z-20">
             <div>
                 <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Mocap Settings</h3>
-                
-                <!-- Calibration Control -->
                 <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
                     <span class="text-[11px] font-bold text-teal-400 uppercase tracking-widest block">User Proportions</span>
                     <button id="btn-calibrate" onclick="triggerCalibration()" class="w-full py-2 bg-teal-600 hover:bg-teal-500 text-xs font-bold rounded-lg transition-all duration-150">
                         📏 Align & Calibrate T-Pose
                     </button>
-                    <div class="text-[10px] text-slate-400 space-y-1 mt-2">
-                        <div>Height Scale: <span id="cal-height" class="font-mono text-white">1.00x</span></div>
-                        <div>Arm Span: <span id="cal-arms" class="font-mono text-white">0.00 m</span></div>
-                    </div>
                 </div>
             </div>
 
-            <!-- Local Python Server Connection -->
+            <!-- Python Server Integration status -->
             <div>
                 <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Local Python Server</h3>
-                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
                     <div class="flex justify-between items-center text-xs text-slate-400">
-                        <span>Connect to Python</span>
-                        <input id="toggle-python" type="checkbox" checked class="w-4 h-4 accent-teal-500" onchange="togglePythonConnection()">
+                        <span>Local Mocap Status</span>
+                        <span id="python-status" class="text-red-400 font-bold">Disconnected</span>
                     </div>
-                    <div id="python-status" class="text-[10px] text-red-400">Status: Disconnected</div>
+                    <button onclick="requestLocalCamera()" class="w-full mt-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold rounded transition">
+                        📷 Use Local PC Webcam instead
+                    </button>
                 </div>
             </div>
 
@@ -115,54 +108,19 @@
                         </div>
                         <input id="slider-cutoff" type="range" min="0.1" max="10" step="0.1" value="1.0" class="w-full custom-slider" oninput="updateFilters()">
                     </div>
-                    
-                    <div class="space-y-1">
-                        <div class="flex justify-between text-xs font-mono text-slate-400">
-                            <span>Beta Factor</span>
-                            <span id="beta-label" class="text-teal-400">0.007</span>
-                        </div>
-                        <input id="slider-beta" type="range" min="0.001" max="0.1" step="0.001" value="0.007" class="w-full custom-slider" oninput="updateFilters()">
-                    </div>
                 </div>
             </div>
 
-            <!-- Model Settings and Mapping Status -->
             <div>
                 <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Retargeting Engine</h3>
                 <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
                     <div class="flex justify-between items-center text-xs text-slate-400">
                         <span>IK Foot Locking</span>
-                        <input id="toggle-ik" type="checkbox" checked class="w-4 h-4 accent-teal-500" onchange="toggleIKSettings()">
-                    </div>
-                    <div class="flex justify-between items-center text-xs text-slate-400">
-                        <span>Prediction Interpolation</span>
-                        <input id="toggle-prediction" type="checkbox" checked class="w-4 h-4 accent-teal-500">
+                        <input id="toggle-ik" type="checkbox" checked class="w-4 h-4 accent-teal-500">
                     </div>
                     <div class="flex justify-between items-center text-xs text-slate-400">
                         <span>Wireframe Mode</span>
                         <input id="toggle-wireframe" type="checkbox" class="w-4 h-4 accent-teal-500" onchange="toggleWireframe()">
-                    </div>
-                    <div class="flex justify-between items-center text-xs text-slate-400">
-                        <span>Chroma Key Filter</span>
-                        <input id="toggle-chroma" type="checkbox" class="w-4 h-4 accent-teal-500" checked>
-                    </div>
-                    <div class="flex justify-between items-center text-xs text-slate-400">
-                        <span>Camera Aspect</span>
-                        <select id="camera-aspect" class="bg-slate-950 border border-slate-800 p-1 rounded text-slate-300 text-[11px] focus:outline-none" onchange="updateCameraAspect()">
-                            <option value="horizontal">Horizontal (16:9)</option>
-                            <option value="vertical">Vertical (9:16)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Environment lighting settings -->
-            <div>
-                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Lighting & Rendering</h3>
-                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                    <div class="space-y-1">
-                        <label class="text-[10px] uppercase font-bold text-slate-500">Light Intensity</label>
-                        <input id="slider-light" type="range" min="0.1" max="3" step="0.1" value="1.0" class="w-full custom-slider" oninput="updateLightSettings()">
                     </div>
                 </div>
             </div>
@@ -200,19 +158,6 @@
                     <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from PC Display</label>
                     <input id="target-peer-code" type="text" placeholder="ABCDE" maxlength="5" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
                     
-                    <!-- Advanced Camera Options -->
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <select id="camera-facing" class="bg-slate-950 border border-slate-800 p-2 rounded text-slate-300">
-                            <option value="user">Front Camera</option>
-                            <option value="environment">Rear Camera</option>
-                        </select>
-                        <select id="video-zoom" class="bg-slate-950 border border-slate-800 p-2 rounded text-slate-300">
-                            <option value="1.0">Zoom 1.0x</option>
-                            <option value="1.5">Zoom 1.5x</option>
-                            <option value="0.75">Zoom 0.75x</option>
-                        </select>
-                    </div>
-
                     <button onclick="connectToDisplay()" class="w-full p-3 bg-teal-600 hover:bg-teal-500 font-semibold rounded-lg transition duration-200">
                         Establish Link & Stream
                     </button>
@@ -258,33 +203,6 @@
                             <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
                         </label>
                     </div>
-                </div>
-
-                <!-- Video File Uploader -->
-                <div class="space-y-2">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Use Prerecorded Video</label>
-                    <div class="flex flex-col gap-2">
-                        <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
-                            <span class="text-xs text-slate-400 text-center font-medium">🎥 Select Video File (.mp4, .webm, .mov)</span>
-                            <input id="video-upload" type="file" accept="video/*" class="hidden" onchange="handleVideoFile(event)">
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Playback Controls -->
-                <div id="video-playback-controls" class="hidden bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="text-slate-400 font-semibold font-mono text-[10px] uppercase">Video Controls</span>
-                        <button id="btn-video-loop" onclick="toggleVideoLoop()" class="text-[9px] text-teal-400 border border-teal-800 px-1.5 py-0.5 rounded transition hover:bg-teal-950">Looping: On</button>
-                    </div>
-                    <div class="flex gap-2">
-                        <button id="btn-video-play" onclick="toggleVideoPlay()" class="flex-grow py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded transition">Pause</button>
-                        <button onclick="clearVideoFile()" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 text-xs font-bold rounded transition">Remove</button>
-                    </div>
-                </div>
-                
-                <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
-                    <div><span class="font-semibold text-slate-300">Avatar:</span> Default low-poly mannequin</div>
                 </div>
             </div>
             
@@ -354,51 +272,6 @@
                     this.xFilter.filter(vec.x, timestamp),
                     this.yFilter.filter(vec.y, timestamp),
                     this.zFilter.filter(vec.z, timestamp)
-                );
-            }
-        }
-
-        // ==================== TEMPORAL POSE BUFFER (PREDICTION) ====================
-        class TemporalPoseBuffer {
-            constructor(maxSize = 30) {
-                this.maxSize = maxSize;
-                this.buffer = [];
-            }
-            add(landmarks) {
-                const timestamp = performance.now() / 1000.0;
-                this.buffer.push({ timestamp, landmarks });
-                if (this.buffer.length > this.maxSize) {
-                    this.buffer.shift();
-                }
-            }
-            getVelocity(jointIndex) {
-                if (this.buffer.length < 2) return new THREE.Vector3(0, 0, 0);
-                const latest = this.buffer[this.buffer.length - 1];
-                const prev = this.buffer[this.buffer.length - 2];
-                const dt = latest.timestamp - prev.timestamp;
-                if (dt <= 0) return new THREE.Vector3(0, 0, 0);
-                
-                const pt1 = latest.landmarks[jointIndex];
-                const pt2 = prev.landmarks[jointIndex];
-                if (!pt1 || !pt2) return new THREE.Vector3(0, 0, 0);
-                
-                return new THREE.Vector3(
-                    (pt1.x - pt2.x) / dt,
-                    (pt1.y - pt2.y) / dt,
-                    (pt1.z - pt2.z) / dt
-                );
-            }
-            predict(jointIndex, dt) {
-                if (this.buffer.length < 2) return null;
-                const latest = this.buffer[this.buffer.length - 1];
-                const currentPt = latest.landmarks[jointIndex];
-                if (!currentPt) return null;
-                
-                const velocity = this.getVelocity(jointIndex);
-                return new THREE.Vector3(
-                    currentPt.x + velocity.x * dt,
-                    currentPt.y + velocity.y * dt,
-                    currentPt.z + velocity.z * dt
                 );
             }
         }
@@ -480,23 +353,17 @@
         let peer = null;
         let localStream = null;
         let activeCall = null;
-        let poseDetector = null;
         let scene, camera, renderer, controls, lightKey;
         let loadedModel = null;
         let resolvedBones = {};
         let animationFrameId = null;
         
         let systemFilters = {};
-        const poseBuffer = new TemporalPoseBuffer();
         let calibrationData = { calibrated: false, userHeight: 1.65, scaleFactor: 1.0 };
-        let metrics = { fps: 0, lastFrameTime: 0, lastRecvTime: 0 };
+        let metrics = { fps: 0, lastFrameTime: 0 };
         
-        let localVideoUrl = null;
-        let poseEngineActive = false;
-        
-        // Added for local Python WebSocket connection
         let pythonSocket = null;
-        let usePythonMocap = true;
+        let bridgeActive = false;
 
         const nameAliases = {
             Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root'],
@@ -536,6 +403,21 @@
             nose: 0, leftEye: 3, rightEye: 6, leftEar: 7, rightEar: 8
         };
 
+        const ANATOMICAL_LIMITS = {
+            Elbow: { x: null, y: null, z: { min: 0, max: 145 * (Math.PI / 180) } },
+            Knee: { x: { min: -140 * (Math.PI / 180), max: 0 }, y: null, z: null },
+            Shoulder: {
+                x: { min: -90 * (Math.PI / 180), max: 90 * (Math.PI / 180) },
+                y: { min: -60 * (Math.PI / 180), max: 60 * (Math.PI / 180) },
+                z: { min: -20 * (Math.PI / 180), max: 120 * (Math.PI / 180) }
+            },
+            Hip: {
+                x: { min: -100 * (Math.PI / 180), max: 30 * (Math.PI / 180) },
+                y: { min: -40 * (Math.PI / 180), max: 40 * (Math.PI / 180) },
+                z: { min: -30 * (Math.PI / 180), max: 60 * (Math.PI / 180) }
+            }
+        };
+
         // ==================== SETUP CONTROLLERS ====================
         function generateCode() {
             return Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -565,7 +447,6 @@
                 }
             });
 
-            // Pass 1: String mapping
             bones.forEach(bone => {
                 for (const [key, aliases] of Object.entries(nameAliases)) {
                     if (resolvedBones[key]) continue;
@@ -580,9 +461,8 @@
                 }
             });
 
-            // Pass 2: Fallback Hierarchy inference
             if (!resolvedBones.Hips && bones.length > 0) {
-                resolvedBones.Hips = bones[0]; // Guess root
+                resolvedBones.Hips = bones[0];
             }
             if (resolvedBones.Hips) {
                 const hips = resolvedBones.Hips;
@@ -644,7 +524,6 @@
             controls.dampingFactor = 0.05;
             controls.target.set(0, 1.0, 0);
 
-            // Lighting System
             const ambient = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambient);
 
@@ -656,7 +535,6 @@
             lightKey.shadow.bias = -0.001;
             scene.add(lightKey);
 
-            // Environments
             const grid = new THREE.GridHelper(12, 24, 0x0d9488, 0x1e293b);
             scene.add(grid);
 
@@ -750,7 +628,6 @@
                 }
             });
 
-            // Structural representations
             const skeleton = new THREE.Skeleton(Object.values(resolvedBones));
             skeleton.bones.forEach((bone) => {
                 const boxGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
@@ -809,8 +686,7 @@
             setStatus('loading', 'Booting Pipeline...');
 
             initThreeJS();
-            initMediaPipe();
-            initPythonWebSocket(); // Attempt connection to Python Mocap server
+            initPythonWebSocket(); // Setup WebSocket channel
 
             const code = generateCode();
             document.getElementById('display-peer-code').innerText = code;
@@ -820,7 +696,6 @@
             peer.on('call', (call) => {
                 setStatus('loading', 'Connecting Call...');
                 
-                // Clear any playing file source when mobile connects
                 if (localVideoUrl) {
                     clearVideoFile();
                 }
@@ -840,92 +715,83 @@
             });
         }
 
-        function initMediaPipe() {
-            poseDetector = new Pose({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-            });
-            poseDetector.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                enableSegmentation: true,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-            poseDetector.onResults(onPoseRawResults);
-        }
-
-        function startPoseEngine() {
-            if (poseEngineActive) return; // Prevent spawning multiple active loops
-            poseEngineActive = true;
-
-            const videoEl = document.getElementById('remote-video');
-            async function loop() {
-                if (!poseEngineActive) return;
-                
-                // Keep loop alive if we have WebRTC active OR we are playing a local file
-                if (!activeCall && !localVideoUrl) {
-                    poseEngineActive = false;
-                    return;
-                }
-                
-                try {
-                    if (videoEl.readyState >= 2 && !videoEl.paused && !videoEl.ended) {
-                        await poseDetector.send({ image: videoEl });
-                    }
-                } catch (e) {}
-                
-                if (videoEl.requestVideoFrameCallback) {
-                    videoEl.requestVideoFrameCallback(loop);
-                } else {
-                    requestAnimationFrame(loop);
-                }
-            }
-            if (videoEl.requestVideoFrameCallback) {
-                videoEl.requestVideoFrameCallback(loop);
-            } else {
-                requestAnimationFrame(loop);
-            }
-        }
-
         // ==================== LOCAL PYTHON WEBSOCKET CONNECTION ====================
         function initPythonWebSocket() {
-            if (!usePythonMocap) return;
-            
             const pythonStatus = document.getElementById('python-status');
             pythonSocket = new WebSocket("ws://localhost:8765");
 
             pythonSocket.onopen = () => {
                 pythonStatus.innerText = "Status: Connected";
                 pythonStatus.className = "text-[10px] text-green-400 font-bold";
-                setStatus('connected', 'Mocap Operational (Python)');
+                setStatus('connected', 'Mocap Connected (Python)');
             };
 
             pythonSocket.onmessage = (event) => {
-                if (!usePythonMocap) return;
                 const payload = JSON.parse(event.data);
                 if (payload.status === "tracking") {
                     processIncomingMocapFrame(payload.landmarks);
+                } else if (payload.status === "error") {
+                    alert(payload.message);
                 }
             };
 
             pythonSocket.onclose = () => {
                 pythonStatus.innerText = "Status: Disconnected";
                 pythonStatus.className = "text-[10px] text-red-400";
-                
-                // Retry local server connection
-                if (usePythonMocap) {
-                    setTimeout(initPythonWebSocket, 3000);
-                }
+                setTimeout(initPythonWebSocket, 3000); // Attempt auto-reconnection
             };
         }
 
-        function togglePythonConnection() {
-            usePythonMocap = document.getElementById('toggle-python').checked;
-            if (!usePythonMocap && pythonSocket) {
-                pythonSocket.close();
-            } else if (usePythonMocap) {
-                initPythonWebSocket();
+        // Forward WebRTC phone frames to local Python server for rendering
+        function startPoseEngine() {
+            if (bridgeActive) return;
+            bridgeActive = true;
+
+            const videoEl = document.getElementById('remote-video');
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Set scale resolution for high CPU performance
+            tempCanvas.width = 480;
+            tempCanvas.height = 640;
+
+            function loop() {
+                if (!bridgeActive) return;
+                
+                // If peer camera feed disconnects, terminate the bridge
+                if (!activeCall && !localVideoUrl) {
+                    bridgeActive = false;
+                    return;
+                }
+
+                if (videoEl.readyState >= 2 && !videoEl.paused && pythonSocket && pythonSocket.readyState === WebSocket.OPEN) {
+                    tempCtx.drawImage(videoEl, 0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    // Convert frame to binary JPEG blob and forward directly to Python
+                    tempCanvas.toBlob((blob) => {
+                        if (blob && pythonSocket.readyState === WebSocket.OPEN) {
+                            pythonSocket.send(blob);
+                        }
+                    }, 'image/jpeg', 0.5); // 50% JPEG quality maintains clean data size
+                }
+
+                // Match 30 FPS processing rate
+                setTimeout(loop, 33);
             }
+            loop();
+        }
+
+        // Trigger local camera tracking through Python instead of WebRTC phone
+        function requestLocalCamera() {
+            if (pythonSocket && pythonSocket.readyState === WebSocket.OPEN) {
+                pythonSocket.send(json_stringify_cmd("start_local_camera"));
+            } else {
+                alert("Python server is not running on your PC.");
+            }
+        }
+
+        function json_stringify_cmd(actionName) {
+            return JSON.stringify({ action: actionName });
         }
 
         // ==================== CALIBRATION & HEIGHT SOLVING ====================
@@ -942,7 +808,6 @@
         function processCalibration(jointCoords) {
             if (!jointCoords.leftAnkle || !jointCoords.leftHip || !jointCoords.leftShoulder || !jointCoords.leftWrist) return;
             
-            // Proportional calculations
             const userHeight = (jointCoords.leftAnkle.distanceTo(jointCoords.leftHip) + 
                                jointCoords.leftHip.distanceTo(jointCoords.leftShoulder) + 0.25);
             const armSpan = jointCoords.leftWrist.distanceTo(jointCoords.rightWrist || jointCoords.leftWrist) * 2;
@@ -959,25 +824,14 @@
         }
 
         // ==================== CORE MATH & RETARGETING FUSION ====================
-        function onPoseRawResults(results) {
+        function processIncomingMocapFrame(rawLms) {
             metrics.fps = Math.round(1000 / (performance.now() - metrics.lastFrameTime));
             metrics.lastFrameTime = performance.now();
             document.getElementById('fps-val').innerText = metrics.fps;
-            document.getElementById('latency-val').innerText = activeCall ? "Low (RTC)" : (localVideoUrl ? "Local File" : "--");
 
-            // Process PIP visual stream (respecting chroma-key toggle)
-            renderChromaPIP(results);
-
-            if (!results.poseWorldLandmarks) return;
-            processIncomingMocapFrame(results.poseWorldLandmarks);
-        }
-
-        // Standardized function to process raw 3D pose coordinates from either source
-        function processIncomingMocapFrame(rawLms) {
             const jointCoords = {};
             const nowSec = performance.now() / 1000.0;
 
-            // Apply One Euro Filters & Confidence checks
             for (const [name, idx] of Object.entries(jointIndices)) {
                 const lm = rawLms[idx];
                 if (lm && (lm.visibility === undefined || lm.visibility > 0.45)) {
@@ -992,18 +846,6 @@
                 }
             }
 
-            // Occlusion Prediction injection
-            poseBuffer.add(jointCoords);
-            if (document.getElementById('toggle-prediction').checked) {
-                for (const name of Object.keys(jointIndices)) {
-                    if (!jointCoords[name] && poseBuffer.buffer.length > 2) {
-                        const predicted = poseBuffer.predict(jointIndices[name], 0.033);
-                        if (predicted) jointCoords[name] = predicted;
-                    }
-                }
-            }
-
-            // Derive intermediate nodes
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
             }
@@ -1015,27 +857,25 @@
                 processCalibration(jointCoords);
             }
 
-            // Scale factor integration
             const scale = calibrationData.calibrated ? calibrationData.scaleFactor : 1.0;
 
-            // 1. Head Rotation Solver (Yaw, Pitch, Roll) with flip safeguards & clamps
+            // 1. Head Rotation Solver with Clamps
             if (resolvedBones.Head && jointCoords.nose && jointCoords.leftEye && jointCoords.rightEye) {
                 const headEuler = estimateHeadOrientation(jointCoords);
                 resolvedBones.Head.quaternion.slerp(new THREE.Quaternion().setFromEuler(headEuler), 0.25);
             }
 
-            // 2. Torso (Spine / Spine distribution solver)
+            // 2. Torso Solver
             if (jointCoords.spineBottom && jointCoords.spineTop) {
                 const spineDir = new THREE.Vector3().subVectors(jointCoords.spineTop, jointCoords.spineBottom).normalize();
                 const spineRot = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), spineDir);
                 
-                // Distribute Spine rotations (35% Spine, 25% Chest, 10% Neck)
                 if (resolvedBones.Spine) resolvedBones.Spine.quaternion.slerp(new THREE.Quaternion().slerp(spineRot, 0.35), 0.2);
                 if (resolvedBones.Chest) resolvedBones.Chest.quaternion.slerp(new THREE.Quaternion().slerp(spineRot, 0.25), 0.2);
                 if (resolvedBones.Neck) resolvedBones.Neck.quaternion.slerp(new THREE.Quaternion().slerp(spineRot, 0.10), 0.2);
             }
 
-            // 3. Root & Pelvis Orientation solving
+            // 3. Hips/Pelvis Solver
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const targetPos = jointCoords.spineBottom.clone().multiplyScalar(scale);
                 resolvedBones.Hips.position.lerp(targetPos, 0.2);
@@ -1047,7 +887,7 @@
                 }
             }
 
-            // 4. Arm / Leg joint mappings
+            // 4. Limbs Solver with Clamping
             BONE_RIG_LINKS.forEach((link) => {
                 const parentBone = resolvedBones[link.bone];
                 const startPt = jointCoords[link.startJoint];
@@ -1062,17 +902,33 @@
                         parentWorldQuatInv.invert();
                         dirLocal.applyQuaternion(parentWorldQuatInv);
                     }
-                    const rotation = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, dirLocal);
+                    let rotation = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, dirLocal);
+                    
+                    let limits = null;
+                    if (link.bone.includes("ForeArm")) {
+                        limits = ANATOMICAL_LIMITS.Elbow;
+                    } else if (link.bone.includes("UpLeg")) {
+                        limits = ANATOMICAL_LIMITS.Hip;
+                    } else if (link.bone.includes("Leg")) {
+                        limits = ANATOMICAL_LIMITS.Knee;
+                    } else if (link.bone.includes("Arm")) {
+                        limits = ANATOMICAL_LIMITS.Shoulder;
+                    }
+
+                    if (limits) {
+                        rotation = clampJointRotation(rotation, limits);
+                    }
+
                     parentBone.quaternion.slerp(rotation, 0.25);
                 }
             });
 
-            // 5. FABRIK Foot Placement and Locking solver
+            // 5. FABRIK Foot Locking Solver
             if (document.getElementById('toggle-ik').checked) {
                 applyFootLocking(jointCoords, scale);
             }
 
-            // 6. Dynamic Floor Grounding (Stabilizer to prevent sinking/floating)
+            // 6. Dynamic Floor Grounding
             if (loadedModel) {
                 let lowestFootY = 0;
                 const leftFootWorld = new THREE.Vector3();
@@ -1088,19 +944,15 @@
                         lowestFootY = rightFootWorld.y;
                     }
                 }
-                
-                // Dynamically offset the entire model root upwards/downwards to snap the lowest foot exactly to the floor grid (Y = 0)
                 loadedModel.position.y -= lowestFootY;
             }
         }
 
         function estimateHeadOrientation(joints) {
-            // Using Left-Eye to Right-Eye direction to avoid 180-degree flip in mirrored space
             const dx = joints.leftEye.x - joints.rightEye.x;
             const dy = joints.leftEye.y - joints.rightEye.y;
-            
             let roll = Math.atan2(dy, dx);
-            roll = THREE.MathUtils.clamp(roll, -0.6, 0.6); // Clamp to realistic neck limits
+            roll = THREE.MathUtils.clamp(roll, -0.6, 0.6);
             
             const distL = joints.nose.distanceTo(joints.leftEye);
             const distR = joints.nose.distanceTo(joints.rightEye);
@@ -1120,7 +972,7 @@
             if (joints.leftAnkle && resolvedBones.LeftUpLeg && resolvedBones.LeftLeg && resolvedBones.LeftFoot) {
                 const lAnklePos = joints.leftAnkle.clone().multiplyScalar(scale);
                 if (lAnklePos.y < floorThreshold) {
-                    lAnklePos.y = 0; // Snap to floor
+                    lAnklePos.y = 0;
                     const solver = new FABRIKSolver(
                         [resolvedBones.LeftUpLeg, resolvedBones.LeftLeg, resolvedBones.LeftFoot], 
                         lAnklePos
@@ -1159,17 +1011,13 @@
             const chromaEnabled = document.getElementById('toggle-chroma').checked;
             
             if (chromaEnabled && results.segmentationMask) {
-                // Crop to visible segmentation mask
                 ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
                 ctx.globalCompositeOperation = 'source-in';
                 ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-                
-                // Draw Virtual Chroma green color behind user
                 ctx.globalCompositeOperation = 'destination-over';
                 ctx.fillStyle = '#00FF00';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             } else {
-                // Draw full camera feed
                 ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
             }
             
@@ -1192,7 +1040,6 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            // Sever active WebRTC connection if it exists
             if (activeCall) {
                 activeCall.close();
                 activeCall = null;
@@ -1207,11 +1054,10 @@
             }
             
             localVideoUrl = URL.createObjectURL(file);
-            videoEl.srcObject = null; // Detach PeerJS stream assignment
+            videoEl.srcObject = null;
             videoEl.src = localVideoUrl;
             videoEl.loop = true;
             
-            // Show UI control layers
             document.getElementById('video-playback-controls').classList.remove('hidden');
             document.getElementById('pip-container').classList.remove('hidden');
 
@@ -1248,10 +1094,10 @@
                 URL.revokeObjectURL(localVideoUrl);
                 localVideoUrl = null;
             }
-            poseEngineActive = false;
+            bridgeActive = false;
             document.getElementById('video-playback-controls').classList.add('hidden');
             document.getElementById('pip-container').classList.add('hidden');
-            document.getElementById('video-upload').value = ""; // Clear file selector
+            document.getElementById('video-upload').value = "";
             setStatus('offline', 'Awaiting Source');
         }
 
@@ -1291,7 +1137,6 @@
             }
         }
 
-        // Added joint limits constraint function
         function clampJointRotation(targetQuat, limits) {
             const euler = new THREE.Euler().setFromQuaternion(targetQuat, 'YXZ');
             if (limits.x !== undefined && limits.x !== null) {
@@ -1311,29 +1156,6 @@
             }
             return new THREE.Quaternion().setFromEuler(euler);
         }
-
-        const ANATOMICAL_LIMITS = {
-            Elbow: {
-                x: null,
-                y: null,
-                z: { min: 0, max: 145 * (Math.PI / 180) }
-            },
-            Knee: {
-                x: { min: -140 * (Math.PI / 180), max: 0 },
-                y: null,
-                z: null
-            },
-            Shoulder: {
-                x: { min: -90 * (Math.PI / 180), max: 90 * (Math.PI / 180) },
-                y: { min: -60 * (Math.PI / 180), max: 60 * (Math.PI / 180) },
-                z: { min: -20 * (Math.PI / 180), max: 120 * (Math.PI / 180) }
-            },
-            Hip: {
-                x: { min: -100 * (Math.PI / 180), max: 30 * (Math.PI / 180) },
-                y: { min: -40 * (Math.PI / 180), max: 40 * (Math.PI / 180) },
-                z: { min: -30 * (Math.PI / 180), max: 60 * (Math.PI / 180) }
-            }
-        };
 
         function updateLightSettings() {
             const value = parseFloat(document.getElementById('slider-light').value);
@@ -1357,7 +1179,6 @@
                 loadedModel = model;
                 scene.add(loadedModel);
 
-                // Auto bounding scale normalization
                 const box = new THREE.Box3().setFromObject(loadedModel);
                 const size = box.getSize(new THREE.Vector3());
                 if (size.y > 0.01) {
@@ -1390,7 +1211,7 @@
                 URL.revokeObjectURL(localVideoUrl);
                 localVideoUrl = null;
             }
-            poseEngineActive = false;
+            bridgeActive = false;
 
             const videoEl = document.getElementById('remote-video');
             if (videoEl) {
@@ -1446,6 +1267,7 @@
         window.toggleVideoPlay = toggleVideoPlay;
         window.toggleVideoLoop = toggleVideoLoop;
         window.clearVideoFile = clearVideoFile;
+        window.requestLocalCamera = requestLocalCamera;
     </script>
 </body>
 </html>
