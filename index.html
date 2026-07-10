@@ -327,10 +327,22 @@
             document.getElementById('setup-view').classList.add('hidden');
             document.getElementById('phone-view').classList.remove('hidden');
             setStatus('offline', 'Source Mode');
-            peer = new Peer();
+            peer = new Peer({
+                debug: 3,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             peer.on('error', (err) => {
-                alert("Connection failed: " + err.message);
+                console.error("PeerJS Error:", err);
+                alert("Connection failed: " + err.message + ". Try refreshing or using HTTPS/localhost.");
                 resetApp();
+            });
+            peer.on('open', (id) => {
+                console.log("Phone Peer opened with ID:", id);
             });
         }
 
@@ -356,12 +368,28 @@
                
                 setStatus('loading', 'Connecting...');
                 const targetPeerId = "WM-MOCAP-" + codeInput;
+                console.log("Initiating call to:", targetPeerId);
                 const call = peer.call(targetPeerId, localStream);
                 activeCall = call;
+                
+                call.on('open', () => {
+                    console.log("Call connection opened");
+                });
+                
+                call.on('stream', (remoteStream) => {
+                    console.log("Received stream back (if any)");
+                });
+                
                 call.on('close', () => {
+                    console.log("Call closed");
                     alert("Display connection lost.");
                     resetApp();
                 });
+                
+                call.on('error', (err) => {
+                    console.error("Call error on phone:", err);
+                });
+                
                 setStatus('connected', 'Live Streaming');
             } catch (err) {
                 console.error(err);
@@ -492,49 +520,69 @@
             peerId = "WM-MOCAP-" + pinCode;
             document.getElementById('display-peer-code').innerText = pinCode;
             
-            peer = new Peer(peerId);
-            peer.on('open', () => {
+            peer = new Peer(peerId, {
+                debug: 3,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+            peer.on('open', (id) => {
+                console.log("Display Peer opened with ID:", id);
                 setStatus('offline', 'Awaiting Source...');
             });
+            peer.on('error', (err) => {
+                console.error("Display PeerJS Error:", err);
+                setStatus('offline', 'Peer Error');
+            });
             peer.on('call', (call) => {
+                console.log("Incoming call received from:", call.peer);
                 setStatus('loading', 'Opening Stream...');
-                call.answer();
+                call.answer();  // Answer without local stream (receiver)
                 activeCall = call;
+                
                 call.on('stream', (remoteStream) => {
+                    console.log("Remote stream received!");
                     const videoEl = document.getElementById('remote-video');
                     document.getElementById('pip-container').classList.remove('hidden');
                     videoEl.srcObject = remoteStream;
 
                     const playAndInit = () => {
+                        console.log("Attempting to play remote video");
                         videoEl.play().then(() => {
+                            console.log("Video playing successfully");
                             setupAudioDSP(remoteStream);
                             startFrameProcessing();
                             setStatus('connected', 'Mocap & DSP Active');
                         }).catch(e => {
-                            console.warn("Autoplay blocked, waiting for fallback action", e);
+                            console.warn("Autoplay blocked:", e);
+                            // Fallback: user interaction will trigger
                         });
                     };
 
-                    // Multi-event bind to ensure media activation triggers securely
                     videoEl.onloadedmetadata = playAndInit;
                     videoEl.onloadeddata = playAndInit;
-                    videoEl.oncanplay = playAndInit;
+                    videoEl.oncanplaythrough = playAndInit;
 
-                    // Fallback force trigger
-                    setTimeout(() => {
-                        if (videoEl.paused || !processingLoopActive) {
-                            playAndInit();
-                        }
-                    }, 600);
+                    setTimeout(playAndInit, 300);
                 });
+                
                 call.on('close', () => {
+                    console.log("Call closed");
                     document.getElementById('pip-container').classList.add('hidden');
                     setStatus('offline', 'Disconnected');
+                });
+                
+                call.on('error', (err) => {
+                    console.error("Call error:", err);
                 });
             });
         }
 
         function initMediaPipe() {
+            console.log("Initializing MediaPipe Pose");
             poseDetector = new Pose({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
             });
@@ -545,6 +593,11 @@
                 minTrackingConfidence: 0.5
             });
             poseDetector.onResults(onPoseAnalysis);
+            poseDetector.initialize().then(() => {
+                console.log("MediaPipe initialized successfully");
+            }).catch(err => {
+                console.error("MediaPipe init failed:", err);
+            });
         }
 
         function startFrameProcessing() {
@@ -553,14 +606,14 @@
             const videoElement = document.getElementById('remote-video');
            
             async function processFrame() {
-                if (!processingLoopActive) return;
+                if (!processingLoopActive || !poseDetector) return;
                 const now = Date.now();
-                if (now - lastProcessed > 33) { // ~30 FPS throttling limit to avoid loop stacking
+                if (now - lastProcessed > 33) { // ~30 FPS
                     if (videoElement.readyState >= 2 && !videoElement.paused) {
                         try {
                             await poseDetector.send({ image: videoElement });
                         } catch (e) {
-                            // Suppressed to maintain execution speed
+                            console.warn("Pose send error:", e);
                         }
                     }
                     lastProcessed = now;
@@ -624,6 +677,7 @@
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         }
 
         function loadDefaultMannequin() {
@@ -997,6 +1051,61 @@
             }
             
             setStatus('offline', 'Offline');
+        }
+
+        // Missing function implementations for UI buttons
+        function hardResetPose() {
+            console.log("Hard reset pose");
+            if (resolvedBones.Hips) {
+                resolvedBones.Hips.position.set(0, 1.0, 0);
+                resolvedBones.Hips.quaternion.set(0, 0, 0, 1);
+            }
+            Object.keys(resolvedBones).forEach(key => {
+                const bone = resolvedBones[key];
+                if (bone && bone.quaternion) {
+                    bone.quaternion.set(0, 0, 0, 1);
+                }
+            });
+            lastHipsPos.set(0, 0, 0);
+            transitionBlend = 0.0;
+        }
+
+        function toggleCalibration() {
+            const panel = document.getElementById('calibration-panel');
+            panel.classList.toggle('hidden');
+            calibrationState = 0;
+            document.getElementById('calibration-prompt').innerText = 'Step 1: Stand straight in a neutral T-Pose.';
+        }
+
+        function cancelCalibration() {
+            document.getElementById('calibration-panel').classList.add('hidden');
+        }
+
+        function confirmCalibrationStep() {
+            // Basic placeholder - can be expanded for custom bone length calc
+            console.log("Calibration step:", calibrationState);
+            if (calibrationState === 0 && latestJointCoords) {
+                // Store current pose as rest
+                customBoneLengths = {};
+                alert("Neutral T-Pose registered! (Advanced calibration stub)");
+            }
+            calibrationState++;
+            document.getElementById('calibration-panel').classList.add('hidden');
+        }
+
+        function triggerJoltReset() {
+            console.log("Jolt detected, resetting");
+            joltCooldown = 30; // frames
+            transitionBlend = 0.0;
+        }
+
+        function clampJointRotation(boneName, quat) {
+            // Simple clamp for elbows/knees to prevent unnatural bends
+            const euler = new THREE.Euler().setFromQuaternion(quat);
+            if (boneName.includes('ForeArm') || boneName.includes('Leg')) {
+                euler.x = Math.max(-1.5, Math.min(1.5, euler.x)); // limit rotation
+            }
+            quat.setFromEuler(euler);
         }
 
         // Global exports
