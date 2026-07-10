@@ -223,7 +223,7 @@
             <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
             
             <!-- Dashboard Overlay -->
-            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl w-80 z-20 space-y-4 backdrop-blur pointer-events-auto">
+            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl w-80 z-20 space-y-4 backdrop-blur pointer-events-auto max-h-[90vh] overflow-y-auto no-scrollbar">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2">
                     <h3 class="font-bold text-sm tracking-wide text-white">System Controller</h3>
                     <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
@@ -245,6 +245,29 @@
                             <span class="text-xs text-slate-400 text-center font-medium">📁 Drop GLB / GLTF / FBX file</span>
                             <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
                         </label>
+                    </div>
+                </div>
+
+                <!-- Video File Uploader -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Use Prerecorded Video</label>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
+                            <span class="text-xs text-slate-400 text-center font-medium">🎥 Select Video File (.mp4, .webm, .mov)</span>
+                            <input id="video-upload" type="file" accept="video/*" class="hidden" onchange="handleVideoFile(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Playback Controls -->
+                <div id="video-playback-controls" class="hidden bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-slate-400 font-semibold font-mono text-[10px] uppercase">Video Controls</span>
+                        <button id="btn-video-loop" onclick="toggleVideoLoop()" class="text-[9px] text-teal-400 border border-teal-800 px-1.5 py-0.5 rounded transition hover:bg-teal-950">Looping: On</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-video-play" onclick="toggleVideoPlay()" class="flex-grow py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded transition">Pause</button>
+                        <button onclick="clearVideoFile()" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 text-xs font-bold rounded transition">Remove</button>
                     </div>
                 </div>
                 
@@ -455,6 +478,9 @@
         const poseBuffer = new TemporalPoseBuffer();
         let calibrationData = { calibrated: false, userHeight: 1.65, scaleFactor: 1.0 };
         let metrics = { fps: 0, lastFrameTime: 0, lastRecvTime: 0 };
+        
+        let localVideoUrl = null;
+        let poseEngineActive = false;
 
         const nameAliases = {
             Hips: ['mixamorigHips', 'Hips', 'bip_pelvis', 'Pelvis', 'root_joint', 'Root'],
@@ -492,6 +518,29 @@
             leftWrist: 15, rightWrist: 16, leftHip: 23, rightHip: 24,
             leftKnee: 25, rightKnee: 26, leftAnkle: 27, rightAnkle: 28,
             nose: 0, leftEye: 3, rightEye: 6, leftEar: 7, rightEar: 8
+        };
+
+        const ANATOMICAL_LIMITS = {
+            Elbow: {
+                x: null,
+                y: null,
+                z: { min: 0, max: 145 * (Math.PI / 180) } // Allow single axis bend
+            },
+            Knee: {
+                x: { min: -140 * (Math.PI / 180), max: 0 }, // Backwards bend
+                y: null,
+                z: null
+            },
+            Shoulder: {
+                x: { min: -90 * (Math.PI / 180), max: 90 * (Math.PI / 180) },
+                y: { min: -60 * (Math.PI / 180), max: 60 * (Math.PI / 180) },
+                z: { min: -20 * (Math.PI / 180), max: 120 * (Math.PI / 180) }
+            },
+            Hip: {
+                x: { min: -100 * (Math.PI / 180), max: 30 * (Math.PI / 180) },
+                y: { min: -40 * (Math.PI / 180), max: 40 * (Math.PI / 180) },
+                z: { min: -30 * (Math.PI / 180), max: 60 * (Math.PI / 180) }
+            }
         };
 
         // ==================== SETUP CONTROLLERS ====================
@@ -776,6 +825,12 @@
             peer.on('open', () => setStatus('offline', 'Awaiting Source'));
             peer.on('call', (call) => {
                 setStatus('loading', 'Connecting Call...');
+                
+                // Clear any local video playback when remote call initiates
+                if (localVideoUrl) {
+                    clearVideoFile();
+                }
+
                 call.answer();
                 activeCall = call;
                 call.on('stream', (stream) => {
@@ -806,15 +861,36 @@
         }
 
         function startPoseEngine() {
+            if (poseEngineActive) return;
+            poseEngineActive = true;
+
             const videoEl = document.getElementById('remote-video');
             async function loop() {
-                if (!activeCall) return;
+                if (!poseEngineActive) return;
+                
+                // Maintain pipeline loop as long as reference stream exists
+                if (!activeCall && !localVideoUrl) {
+                    poseEngineActive = false;
+                    return;
+                }
+                
                 try {
-                    await poseDetector.send({ image: videoEl });
+                    if (videoEl.readyState >= 2 && !videoEl.paused && !videoEl.ended) {
+                        await poseDetector.send({ image: videoEl });
+                    }
                 } catch (e) {}
-                videoEl.requestVideoFrameCallback ? videoEl.requestVideoFrameCallback(loop) : requestAnimationFrame(loop);
+                
+                if (videoEl.requestVideoFrameCallback) {
+                    videoEl.requestVideoFrameCallback(loop);
+                } else {
+                    requestAnimationFrame(loop);
+                }
             }
-            videoEl.requestVideoFrameCallback ? videoEl.requestVideoFrameCallback(loop) : requestAnimationFrame(loop);
+            if (videoEl.requestVideoFrameCallback) {
+                videoEl.requestVideoFrameCallback(loop);
+            } else {
+                requestAnimationFrame(loop);
+            }
         }
 
         // ==================== CALIBRATION & HEIGHT SOLVING ====================
@@ -847,12 +923,35 @@
             document.getElementById('btn-calibrate').className = "w-full py-2 bg-green-600 text-xs font-bold rounded-lg";
         }
 
+        // ==================== JOINT ROTATION CLAMPING ENGINE ====================
+        function clampJointRotation(targetQuat, limits) {
+            const euler = new THREE.Euler().setFromQuaternion(targetQuat, 'YXZ');
+            
+            if (limits.x !== undefined && limits.x !== null) {
+                euler.x = THREE.MathUtils.clamp(euler.x, limits.x.min, limits.x.max);
+            } else {
+                euler.x = 0;
+            }
+            if (limits.y !== undefined && limits.y !== null) {
+                euler.y = THREE.MathUtils.clamp(euler.y, limits.y.min, limits.y.max);
+            } else {
+                euler.y = 0;
+            }
+            if (limits.z !== undefined && limits.z !== null) {
+                euler.z = THREE.MathUtils.clamp(euler.z, limits.z.min, limits.z.max);
+            } else {
+                euler.z = 0;
+            }
+
+            return new THREE.Quaternion().setFromEuler(euler);
+        }
+
         // ==================== CORE MATH & RETARGETING FUSION ====================
         function onPoseRawResults(results) {
             metrics.fps = Math.round(1000 / (performance.now() - metrics.lastFrameTime));
             metrics.lastFrameTime = performance.now();
             document.getElementById('fps-val').innerText = metrics.fps;
-            document.getElementById('latency-val').innerText = activeCall ? "Low (RTC)" : "--";
+            document.getElementById('latency-val').innerText = activeCall ? "Low (RTC)" : (localVideoUrl ? "Local File" : "--");
 
             // Process PIP visual stream (respecting chroma-key toggle)
             renderChromaPIP(results);
@@ -932,7 +1031,7 @@
                 }
             }
 
-            // 4. Arm / Leg joint mappings
+            // 4. Arm / Leg joint mappings with Anatomical Range-Of-Motion clamps
             BONE_RIG_LINKS.forEach((link) => {
                 const parentBone = resolvedBones[link.bone];
                 const startPt = jointCoords[link.startJoint];
@@ -947,7 +1046,24 @@
                         parentWorldQuatInv.invert();
                         dirLocal.applyQuaternion(parentWorldQuatInv);
                     }
-                    const rotation = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, dirLocal);
+                    let rotation = new THREE.Quaternion().setFromUnitVectors(link.defaultLocalDir, dirLocal);
+                    
+                    // Assign targeted joint limit profiles
+                    let limits = null;
+                    if (link.bone.includes("ForeArm")) {
+                        limits = ANATOMICAL_LIMITS.Elbow;
+                    } else if (link.bone.includes("UpLeg")) {
+                        limits = ANATOMICAL_LIMITS.Hip;
+                    } else if (link.bone.includes("Leg")) {
+                        limits = ANATOMICAL_LIMITS.Knee;
+                    } else if (link.bone.includes("Arm")) {
+                        limits = ANATOMICAL_LIMITS.Shoulder;
+                    }
+
+                    if (limits) {
+                        rotation = clampJointRotation(rotation, limits);
+                    }
+
                     parentBone.quaternion.slerp(rotation, 0.25);
                 }
             });
@@ -1072,6 +1188,74 @@
             }
         }
 
+        // ==================== LOCAL VIDEO PIPELINE CONTROLS ====================
+        function handleVideoFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Sever active remote call if it exists
+            if (activeCall) {
+                activeCall.close();
+                activeCall = null;
+            }
+
+            setStatus('connected', 'Local File Playback');
+
+            const videoEl = document.getElementById('remote-video');
+            
+            if (localVideoUrl) {
+                URL.revokeObjectURL(localVideoUrl);
+            }
+            
+            localVideoUrl = URL.createObjectURL(file);
+            videoEl.srcObject = null; // Detach WebRTC stream source
+            videoEl.src = localVideoUrl;
+            videoEl.loop = true;
+            
+            // Show custom controls
+            document.getElementById('video-playback-controls').classList.remove('hidden');
+            document.getElementById('pip-container').classList.remove('hidden');
+
+            videoEl.onloadedmetadata = () => {
+                videoEl.play();
+                startPoseEngine();
+            };
+        }
+
+        function toggleVideoPlay() {
+            const videoEl = document.getElementById('remote-video');
+            const btn = document.getElementById('btn-video-play');
+            if (videoEl.paused) {
+                videoEl.play();
+                btn.innerText = "Pause";
+            } else {
+                videoEl.pause();
+                btn.innerText = "Play";
+            }
+        }
+
+        function toggleVideoLoop() {
+            const videoEl = document.getElementById('remote-video');
+            const btn = document.getElementById('btn-video-loop');
+            videoEl.loop = !videoEl.loop;
+            btn.innerText = `Looping: ${videoEl.loop ? 'On' : 'Off'}`;
+        }
+
+        function clearVideoFile() {
+            const videoEl = document.getElementById('remote-video');
+            videoEl.pause();
+            videoEl.src = "";
+            if (localVideoUrl) {
+                URL.revokeObjectURL(localVideoUrl);
+                localVideoUrl = null;
+            }
+            poseEngineActive = false;
+            document.getElementById('video-playback-controls').classList.add('hidden');
+            document.getElementById('pip-container').classList.add('hidden');
+            document.getElementById('video-upload').value = ""; // Reset input
+            setStatus('offline', 'Awaiting Source');
+        }
+
         // ==================== RENDERING LOOP ====================
         function animate() {
             animationFrameId = requestAnimationFrame(animate);
@@ -1159,6 +1343,19 @@
                 activeCall.close();
                 activeCall = null;
             }
+            if (localVideoUrl) {
+                URL.revokeObjectURL(localVideoUrl);
+                localVideoUrl = null;
+            }
+            poseEngineActive = false;
+
+            const videoEl = document.getElementById('remote-video');
+            if (videoEl) {
+                videoEl.pause();
+                videoEl.src = "";
+                videoEl.srcObject = null;
+            }
+
             if (peer) {
                 peer.destroy();
                 peer = null;
@@ -1175,6 +1372,10 @@
             document.getElementById('phone-input-container').classList.remove('hidden');
             document.getElementById('phone-stream-container').classList.add('hidden');
             document.getElementById('pip-container').classList.add('hidden');
+            document.getElementById('video-playback-controls').classList.add('hidden');
+            
+            const videoUploadInput = document.getElementById('video-upload');
+            if (videoUploadInput) videoUploadInput.value = "";
 
             const container = document.getElementById('canvas-container');
             while (container.firstChild) {
@@ -1195,6 +1396,10 @@
         window.handleModelFile = handleModelFile;
         window.triggerCalibration = triggerCalibration;
         window.updateCameraAspect = updateCameraAspect;
+        window.handleVideoFile = handleVideoFile;
+        window.toggleVideoPlay = toggleVideoPlay;
+        window.toggleVideoLoop = toggleVideoLoop;
+        window.clearVideoFile = clearVideoFile;
     </script>
 </body>
 </html>
