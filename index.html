@@ -2,1147 +2,825 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SKEL Mocap - Live Performance System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Rig-Mirror 3D · SKEL Constrained</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Three.js Core -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    
+    <!-- fflate (required by FBXLoader) -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.0/umd/index.min.js"></script>
     
     <!-- Three.js Addons -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/FBXLoader.js"></script>
     
-    <!-- PeerJS for WebRTC -->
+    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
     <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-    
+
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            overflow: hidden; 
-            font-family: 'Segoe UI', sans-serif; 
-            background: #0a0a12; 
-            color: white;
-        }
-        #container { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; }
-        
-        /* Setup Screen */
-        #setup-screen {
-            position: fixed;
-            inset: 0;
-            background: rgba(10, 10, 18, 0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 20px;
-        }
-        #setup-screen.hidden { display: none; }
-        
-        .setup-card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 24px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            text-align: center;
-        }
-        .setup-card h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, #60a5fa, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .setup-card p {
-            color: #94a3b8;
-            font-size: 14px;
-            margin-bottom: 24px;
-        }
-        .setup-btn {
-            display: block;
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 12px;
-        }
-        .btn-display {
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            color: white;
-        }
-        .btn-display:hover { transform: scale(1.02); }
-        .btn-camera {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        .btn-camera:hover { background: rgba(255,255,255,0.2); }
-        
-        /* Phone Streamer */
-        #phone-view {
-            position: fixed;
-            inset: 0;
-            background: rgba(10, 10, 18, 0.95);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 20px;
-        }
-        #phone-view.active { display: flex; }
-        
-        .phone-card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 24px;
-            padding: 30px;
-            max-width: 400px;
-            width: 100%;
-        }
-        .phone-card input {
-            width: 100%;
-            padding: 14px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 10px;
-            color: white;
-            font-size: 24px;
-            text-align: center;
-            font-family: monospace;
-            letter-spacing: 8px;
-            text-transform: uppercase;
-            margin-bottom: 12px;
-        }
-        .phone-card input:focus {
-            outline: none;
-            border-color: #60a5fa;
-        }
-        .phone-card video {
-            width: 100%;
-            border-radius: 12px;
-            background: #000;
-            transform: scaleX(-1);
-            margin-bottom: 12px;
-        }
-        
-        /* HUD */
-        #hud {
-            position: fixed;
-            top: 16px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 10px 24px;
-            font-size: 13px;
-            color: #94a3b8;
-            z-index: 50;
-            display: none;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        #hud.active { display: flex; }
-        #hud .status { 
-            display: flex; 
-            align-items: center; 
-            gap: 8px;
-        }
-        #hud .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        .dot.green { background: #22c55e; }
-        .dot.red { background: #ef4444; }
-        .dot.yellow { background: #eab308; }
-        .dot.blue { background: #3b82f6; }
-        
-        #hud .code-display {
-            background: rgba(59, 130, 246, 0.2);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 8px;
-            padding: 4px 16px;
-            font-family: monospace;
-            font-size: 24px;
-            font-weight: 700;
-            color: #60a5fa;
-            letter-spacing: 6px;
-        }
-        #hud .fps { color: #60a5fa; font-weight: 600; }
-        
-        /* Controls */
-        #controls {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 50;
-            display: none;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        #controls.active { display: flex; }
-        #controls button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: rgba(255,255,255,0.1);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        #controls button:hover { background: rgba(255,255,255,0.2); }
-        #controls .btn-danger { background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.3); }
-        #controls .btn-danger:hover { background: rgba(239, 68, 68, 0.5); }
-        #controls .btn-model { background: rgba(96, 165, 250, 0.2); border-color: rgba(96, 165, 250, 0.3); }
-        #controls .btn-model:hover { background: rgba(96, 165, 250, 0.3); }
-        
-        /* Model Upload */
-        #model-upload {
-            display: none;
-        }
-        
-        /* Responsive */
+        .transition-all { transition: all 0.3s ease; }
+        video { transform: scaleX(-1); }
+        #remote-video { transform: scaleX(1); }
+        #local-video { transform: scaleX(-1); }
+        #pip-canvas { transform: scaleX(-1); }
         @media (max-width: 640px) {
-            #hud { font-size: 11px; padding: 8px 16px; gap: 10px; }
-            #hud .code-display { font-size: 18px; letter-spacing: 4px; }
-            .setup-card { padding: 24px; }
+            #display-dashboard { max-width: 90vw; left: 5vw; top: 10px; padding: 12px; }
+            #pip-container { width: 120px; height: 90px; bottom: 10px; right: 10px; }
         }
+        .loader-spinner {
+            border: 2px solid rgba(0, 243, 255, 0.2);
+            border-top: 2px solid #00f3ff;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* bone axis helper */
+        .axis-helper { opacity: 0.4; pointer-events: none; }
     </style>
 </head>
-<body>
-
-<!-- Setup Screen -->
-<div id="setup-screen">
-    <div class="setup-card">
-        <h1>🎭 SKEL Mocap</h1>
-        <p>Live motion capture with biomechanical precision</p>
-        
-        <button class="setup-btn btn-display" onclick="startDisplay()">
-            🖥️ Start Display (PC)
-        </button>
-        <button class="setup-btn btn-camera" onclick="startCamera()">
-            📱 Start Camera (Phone)
-        </button>
-        
-        <div style="margin-top: 16px; font-size: 11px; color: #64748b;">
-            Phone streams video → PC maps to SKEL avatar
+<body class="bg-slate-950 text-slate-100 font-sans h-screen overflow-hidden flex flex-col">
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center gap-2">
+            <span class="text-xl font-bold tracking-wider text-teal-400">⚡ SKEL‑Mirror</span>
+            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">biomech • constrained</span>
         </div>
-    </div>
-</div>
-
-<!-- Phone View -->
-<div id="phone-view">
-    <div class="phone-card">
-        <h2 style="color: #60a5fa; font-size: 18px; margin-bottom: 16px;">📱 Camera Streamer</h2>
-        
-        <div id="phone-join">
-            <p style="color: #94a3b8; font-size: 13px; margin-bottom: 8px;">Enter PC's 5-digit code:</p>
-            <input id="peer-code" type="text" maxlength="5" placeholder="ABCDE" autofocus>
-            <button onclick="connectToDisplay()" style="width:100%; padding:14px; background: #3b82f6; border:none; border-radius:10px; color:white; font-weight:600; font-size:16px; cursor:pointer;">
-                Connect & Stream
-            </button>
+        <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
+            <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
         </div>
-        
-        <div id="phone-stream" style="display:none;">
-            <video id="local-video" autoplay playsinline muted></video>
-            <div style="display:flex; gap:8px; justify-content:center; align-items:center;">
-                <span style="color:#22c55e; font-size:12px;">● LIVE</span>
-                <span style="color:#94a3b8; font-size:12px;" id="stream-status">Streaming...</span>
+    </header>
+
+    <!-- Main Viewport -->
+    <main class="relative flex-grow w-full overflow-hidden">
+        <!-- 1. SETUP SCREEN -->
+        <div id="setup-view" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-40 overflow-y-auto">
+            <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
+                <div>
+                    <h2 class="text-2xl font-bold mb-2 text-white">Choose Your Device Role</h2>
+                    <p class="text-sm text-slate-400">Biomechanical SKEL constraints applied — joint limits, bone‑aligned axes, and kinematic chains.</p>
+                </div>
+                <div class="space-y-4">
+                    <button onclick="startAsDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-xl font-semibold shadow-lg shadow-teal-900/30 transition-all duration-200">
+                        🖥️ Display Screen (PC/Laptop)
+                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models, applies SKEL‑inspired rigging</span>
+                    </button>
+                    <div class="flex items-center justify-center gap-2 my-2 text-xs text-slate-500">
+                        <span class="h-px bg-slate-800 flex-grow"></span> OR <span class="h-px bg-slate-800 flex-grow"></span>
+                    </div>
+                    <button onclick="startAsCamera()" class="w-full p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-semibold transition-all duration-200">
+                        📱 Phone Camera Source
+                        <span class="block text-xs font-normal text-slate-400 mt-1">Streams low-latency video to PC</span>
+                    </button>
+                </div>
             </div>
-            <button onclick="disconnectStream()" style="width:100%; padding:12px; margin-top:12px; background: rgba(239,68,68,0.3); border:1px solid rgba(239,68,68,0.3); border-radius:10px; color:#ef4444; font-weight:600; cursor:pointer;">
-                Disconnect
-            </button>
         </div>
-    </div>
-</div>
 
-<!-- HUD -->
-<div id="hud">
-    <span class="status">
-        <span class="dot green" id="status-dot"></span>
-        <span id="status-text">Ready</span>
-    </span>
-    <span>|</span>
-    <span>Code: <span class="code-display" id="display-code">-----</span></span>
-    <span>|</span>
-    <span>FPS: <span class="fps" id="fps-display">0</span></span>
-    <span>|</span>
-    <span>Bones: <span id="bone-count">0</span>/46</span>
-</div>
+        <!-- 2. PHONE STREAMER VIEW -->
+        <div id="phone-view" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-4 z-30">
+            <div class="max-w-sm w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
+                <h2 class="text-xl font-bold text-center">📱 Phone Camera Streamer</h2>
+                <div id="phone-input-container" class="space-y-3">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Enter Code from PC Display</label>
+                    <input id="target-peer-code" type="text" placeholder="ABCDE" maxlength="5" class="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-center font-mono text-2xl tracking-widest text-teal-400 uppercase focus:outline-none focus:border-teal-500">
+                    <button onclick="connectToDisplay()" class="w-full p-3 bg-teal-600 hover:bg-teal-500 font-semibold rounded-lg transition duration-200">
+                        Establish Link & Stream
+                    </button>
+                </div>
+                <div id="phone-stream-container" class="hidden space-y-4">
+                    <div class="relative aspect-[9/16] bg-black border border-slate-800 rounded-lg overflow-hidden max-h-[60vh]">
+                        <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                        <div class="absolute bottom-2 left-2 bg-black/60 text-[10px] px-2 py-0.5 rounded text-slate-300">📹 Live</div>
+                    </div>
+                    <p class="text-xs text-slate-400 text-center">📱 Hold your phone <span class="font-bold text-white">vertically</span> for best full-body capture.</p>
+                    <button onclick="resetApp()" class="w-full p-3 bg-red-600 hover:bg-red-500 font-semibold rounded-lg transition duration-200">
+                        Disconnect Stream
+                    </button>
+                </div>
+            </div>
+        </div>
 
-<!-- Controls -->
-<div id="controls">
-    <button class="btn-model" onclick="document.getElementById('model-upload').click()">
-        📁 Load SKEL Mesh
-    </button>
-    <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" onchange="loadSKELMesh(event)">
-    <button onclick="resetApp()" class="btn-danger">✕ Exit</button>
-</div>
-
-<!-- Three.js Container -->
-<div id="container"></div>
-
-<script>
-// ============================================================
-// 1. CORE VARIABLES
-// ============================================================
-let peer = null;
-let peerId = "";
-let localStream = null;
-let activeCall = null;
-let poseDetector = null;
-let processingLoop = false;
-let displayCode = "";
-
-let scene, camera, renderer, controls;
-let avatar = null;
-let avatarBones = {};
-let skelMeshGroup = null;
-let skelMeshLoaded = false;
-
-let frameCount = 0;
-let lastFpsUpdate = 0;
-
-// MediaPipe joint indices
-const JOINT_INDICES = {
-    leftShoulder: 11, rightShoulder: 12,
-    leftElbow: 13, rightElbow: 14,
-    leftWrist: 15, rightWrist: 16,
-    leftHip: 23, rightHip: 24,
-    leftKnee: 25, rightKnee: 26,
-    leftAnkle: 27, rightAnkle: 28,
-    leftEar: 7, rightEar: 8,
-    nose: 0
-};
-
-// ============================================================
-// 2. SKEL - Biomechanical Avatar System
-// ============================================================
-
-/**
- * SKELAvatar - Creates a biomechanically constrained avatar
- * using Three.js bones. The 46 DOFs of SKEL are mapped to
- * bone rotations with built-in anatomical limits.
- */
-class SKELAvatar {
-    constructor(scene, useSkelMesh = false) {
-        this.scene = scene;
-        this.group = new THREE.Group();
-        this.scene.add(this.group);
-        
-        this.bones = {};
-        this.boneMeshes = {};
-        this.useSkelMesh = useSkelMesh;
-        this.skelMeshGroup = null;
-        
-        this.jointLimits = this.getJointLimits();
-        
-        this.buildSkeleton();
-        if (!useSkelMesh) {
-            this.buildMesh();
-        }
-    }
-    
-    /**
-     * SKEL has 46 biomechanical degrees of freedom mapped to specific joints.
-     * Each joint has a specific rotation axis and range.
-     */
-    getJointLimits() {
-        return {
-            spine: {
-                flexion: { min: -30, max: 60, axis: 'x' },
-                lateral: { min: -30, max: 30, axis: 'z' },
-                rotation: { min: -45, max: 45, axis: 'y' }
-            },
-            neck: {
-                flexion: { min: -30, max: 45, axis: 'x' },
-                lateral: { min: -20, max: 20, axis: 'z' },
-                rotation: { min: -60, max: 60, axis: 'y' }
-            },
-            shoulder: {
-                flexion: { min: -180, max: 180, axis: 'x' },
-                abduction: { min: -90, max: 180, axis: 'z' },
-                rotation: { min: -90, max: 90, axis: 'y' }
-            },
-            elbow: {
-                flexion: { min: 0, max: 145, axis: 'x' }
-            },
-            wrist: {
-                flexion: { min: -60, max: 60, axis: 'x' },
-                deviation: { min: -30, max: 30, axis: 'z' }
-            },
-            hip: {
-                flexion: { min: -30, max: 120, axis: 'x' },
-                abduction: { min: -45, max: 45, axis: 'z' },
-                rotation: { min: -45, max: 45, axis: 'y' }
-            },
-            knee: {
-                flexion: { min: 0, max: 150, axis: 'x' }
-            },
-            ankle: {
-                dorsiflexion: { min: -20, max: 30, axis: 'x' },
-                inversion: { min: -15, max: 15, axis: 'z' }
-            }
-        };
-    }
-    
-    /**
-     * Build the skeleton with biomechanical constraints
-     */
-    buildSkeleton() {
-        const root = new THREE.Bone();
-        root.name = 'root';
-        root.position.set(0, 1.0, 0);
-        this.group.add(root);
-        this.bones.root = root;
-        
-        // Spine chain
-        const spine1 = this.createBone('spine1', 0, 0.15, 0, root);
-        const spine2 = this.createBone('spine2', 0, 0.15, 0, spine1);
-        const spine3 = this.createBone('spine3', 0, 0.12, 0, spine2);
-        const neck = this.createBone('neck', 0, 0.10, 0, spine3);
-        const head = this.createBone('head', 0, 0.10, 0, neck);
-        
-        // Left arm chain
-        const lShoulder = this.createBone('lShoulder', 0.15, 0.10, 0, spine2);
-        const lUpperArm = this.createBone('lUpperArm', 0.20, 0, 0, lShoulder);
-        const lForearm = this.createBone('lForearm', 0.20, 0, 0, lUpperArm);
-        const lHand = this.createBone('lHand', 0.12, 0, 0, lForearm);
-        
-        // Right arm chain
-        const rShoulder = this.createBone('rShoulder', -0.15, 0.10, 0, spine2);
-        const rUpperArm = this.createBone('rUpperArm', -0.20, 0, 0, rShoulder);
-        const rForearm = this.createBone('rForearm', -0.20, 0, 0, rUpperArm);
-        const rHand = this.createBone('rHand', -0.12, 0, 0, rForearm);
-        
-        // Left leg chain
-        const lHip = this.createBone('lHip', 0.08, -0.05, 0, root);
-        const lThigh = this.createBone('lThigh', 0, -0.35, 0, lHip);
-        const lShin = this.createBone('lShin', 0, -0.35, 0, lThigh);
-        const lFoot = this.createBone('lFoot', 0, -0.10, 0.05, lShin);
-        
-        // Right leg chain
-        const rHip = this.createBone('rHip', -0.08, -0.05, 0, root);
-        const rThigh = this.createBone('rThigh', 0, -0.35, 0, rHip);
-        const rShin = this.createBone('rShin', 0, -0.35, 0, rThigh);
-        const rFoot = this.createBone('rFoot', 0, -0.10, 0.05, rShin);
-        
-        // Store all bones
-        this.bones = {
-            root, spine1, spine2, spine3, neck, head,
-            lShoulder, lUpperArm, lForearm, lHand,
-            rShoulder, rUpperArm, rForearm, rHand,
-            lHip, lThigh, lShin, lFoot,
-            rHip, rThigh, rShin, rFoot
-        };
-        
-        const boneArray = Object.values(this.bones);
-        this.skeleton = new THREE.Skeleton(boneArray);
-    }
-    
-    createBone(name, x, y, z, parent) {
-        const bone = new THREE.Bone();
-        bone.name = name;
-        bone.position.set(x, y, z);
-        if (parent) parent.add(bone);
-        return bone;
-    }
-    
-    /**
-     * Build visual mesh for the avatar (blocky default)
-     */
-    buildMesh() {
-        const parts = [
-            { name: 'head', bone: 'head', width: 0.20, height: 0.25, depth: 0.20, color: 0xfcd34d },
-            { name: 'torso', bone: 'spine2', width: 0.30, height: 0.30, depth: 0.18, color: 0x3b82f6 },
-            { name: 'pelvis', bone: 'root', width: 0.28, height: 0.15, depth: 0.16, color: 0x1d4ed8 },
-            { name: 'lUpperArm', bone: 'lUpperArm', width: 0.06, height: 0.20, depth: 0.06, color: 0x60a5fa },
-            { name: 'lForearm', bone: 'lForearm', width: 0.05, height: 0.18, depth: 0.05, color: 0x60a5fa },
-            { name: 'rUpperArm', bone: 'rUpperArm', width: 0.06, height: 0.20, depth: 0.06, color: 0x60a5fa },
-            { name: 'rForearm', bone: 'rForearm', width: 0.05, height: 0.18, depth: 0.05, color: 0x60a5fa },
-            { name: 'lThigh', bone: 'lThigh', width: 0.08, height: 0.30, depth: 0.08, color: 0x1d4ed8 },
-            { name: 'lShin', bone: 'lShin', width: 0.07, height: 0.30, depth: 0.07, color: 0x1d4ed8 },
-            { name: 'rThigh', bone: 'rThigh', width: 0.08, height: 0.30, depth: 0.08, color: 0x1d4ed8 },
-            { name: 'rShin', bone: 'rShin', width: 0.07, height: 0.30, depth: 0.07, color: 0x1d4ed8 },
-        ];
-        
-        parts.forEach(part => {
-            const bone = this.bones[part.bone];
-            if (!bone) return;
+        <!-- 3. PC DISPLAY VIEW -->
+        <div id="display-view" class="hidden absolute inset-0 w-full h-full">
+            <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
             
-            const geo = new THREE.BoxGeometry(part.width, part.height, part.depth);
-            const mat = new THREE.MeshStandardMaterial({ 
-                color: part.color,
-                roughness: 0.4,
-                metalness: 0.1
+            <!-- Dashboard -->
+            <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-5 rounded-2xl shadow-2xl max-w-sm z-20 space-y-4 backdrop-blur pointer-events-auto">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard</h3>
+                    <button onclick="resetApp()" class="text-xs text-slate-400 hover:text-red-400 transition">Exit</button>
+                </div>
+               
+                <div id="code-prompt" class="space-y-1 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider block">Link Code</span>
+                    <div class="flex items-center gap-3">
+                        <span id="display-peer-code" class="text-2xl font-mono font-bold text-teal-400">Generating...</span>
+                        <span class="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Enter on phone</span>
+                    </div>
+                </div>
+                
+                <!-- Model Uploader -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Load Custom 3D Model</label>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex flex-col items-center justify-center w-full h-18 border-2 border-dashed border-slate-800 hover:border-teal-500 bg-slate-950 rounded-xl cursor-pointer transition p-3">
+                            <span class="text-xs text-slate-400 text-center font-medium">📁 Drop or Upload .glb / .gltf / .fbx</span>
+                            <input id="model-upload" type="file" accept=".glb,.gltf,.fbx" class="hidden" onchange="handleModelFile(event)">
+                        </label>
+                        <div class="flex gap-2">
+                            <input id="model-url" type="text" placeholder="Or enter GLB/FBX URL..." class="flex-grow p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono focus:outline-none focus:border-teal-500">
+                            <button onclick="loadFromURLInput()" class="px-3 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700">Load</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="model-info" class="text-[11px] text-slate-400 border-t border-slate-800 pt-3 space-y-1">
+                    <div><span class="font-semibold text-slate-300">SKEL‑inspired rig:</span> biomechanical constraints (joint limits, bone‑aligned axes).</div>
+                    <div>Upload a rigged model to test constrained mapping.</div>
+                </div>
+            </div>
+            
+            <!-- Video PiP with Chroma Key -->
+            <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
+                <video id="remote-video" autoplay playsinline muted class="hidden"></video>
+                <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
+                <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Chroma Feed</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ============================================================
+        // CORE VARIABLES
+        // ============================================================
+        let peer = null;
+        let peerId = "";
+        let localStream = null;
+        let poseDetector = null;
+        let activeCall = null;
+        let processingLoopActive = false;
+        let lastProcessed = 0;
+        let modelLoadAttempts = 0;
+        
+        let scene, camera, renderer, controls;
+        let loadedModel = null;
+        let resolvedBones = {};
+        let animationFrameId = null;
+
+        const setupView = document.getElementById('setup-view');
+        const phoneView = document.getElementById('phone-view');
+        const displayView = document.getElementById('display-view');
+
+        // ============================================================
+        // SKEL‑INSPIRED CONSTRAINTS (biomechanical limits & bone axes)
+        // ============================================================
+        // Based on SKEL (Keller et al.) and SMPL (Loper et al.)
+        // Joint limits (radians) for hinge / ball joints
+        const JOINT_LIMITS = {
+            // Hinge: elbow, knee (flexion/extension)
+            elbow: { min: -0.1, max: 2.2 },   // ~ -5° to 125°
+            knee:  { min: -0.05, max: 2.3 },  // ~ -3° to 130°
+            // Ball: shoulder, hip (cone limits)
+            shoulder: { cone: 1.8 },          // ~100° half-angle
+            hip: { cone: 1.6 },               // ~90° half-angle
+            spine: { x: 0.6, z: 0.6, y: 0.4 }, // lumbar/thoracic
+            neck: { x: 0.5, z: 0.5, y: 0.4 }
+        };
+
+        // Bone axes: define local Z as primary axis for limbs (SKEL‑aligned)
+        // We store default local direction for each bone (in parent space)
+        const BONE_AXES = {
+            LeftArm:     new THREE.Vector3(0, 0, 1),
+            LeftForeArm: new THREE.Vector3(0, 0, 1),
+            RightArm:    new THREE.Vector3(0, 0, -1),
+            RightForeArm:new THREE.Vector3(0, 0, -1),
+            LeftUpLeg:   new THREE.Vector3(0, -1, 0),
+            LeftLeg:     new THREE.Vector3(0, -1, 0),
+            LeftFoot:    new THREE.Vector3(0, -1, 0),
+            RightUpLeg:  new THREE.Vector3(0, -1, 0),
+            RightLeg:    new THREE.Vector3(0, -1, 0),
+            RightFoot:   new THREE.Vector3(0, -1, 0),
+            Spine:       new THREE.Vector3(0, 1, 0),
+            Neck:        new THREE.Vector3(0, 1, 0)
+        };
+
+        // Kinematic chain (parent->child) for pose propagation
+        const KINEMATIC_CHAIN = [
+            ['Hips', 'Spine'],
+            ['Spine', 'Neck'],
+            ['Spine', 'LeftArm'],
+            ['Spine', 'RightArm'],
+            ['LeftArm', 'LeftForeArm'],
+            ['RightArm', 'RightForeArm'],
+            ['Hips', 'LeftUpLeg'],
+            ['Hips', 'RightUpLeg'],
+            ['LeftUpLeg', 'LeftLeg'],
+            ['RightUpLeg', 'RightLeg'],
+            ['LeftLeg', 'LeftFoot'],
+            ['RightLeg', 'RightFoot']
+        ];
+
+        // Map MediaPipe joints to bone endpoints (SKEL joint mapping)
+        const jointIndices = {
+            leftShoulder: 11, rightShoulder: 12,
+            leftElbow: 13, rightElbow: 14,
+            leftWrist: 15, rightWrist: 16,
+            leftHip: 23, rightHip: 24,
+            leftKnee: 25, rightKnee: 26,
+            leftAnkle: 27, rightAnkle: 28
+        };
+
+        // Bone-to-joint mapping for constraint application
+        const BONE_JOINT_MAP = {
+            LeftArm:   { start: 'leftShoulder', end: 'leftElbow', type: 'shoulder' },
+            LeftForeArm: { start: 'leftElbow', end: 'leftWrist', type: 'elbow' },
+            RightArm:  { start: 'rightShoulder', end: 'rightElbow', type: 'shoulder' },
+            RightForeArm: { start: 'rightElbow', end: 'rightWrist', type: 'elbow' },
+            LeftUpLeg: { start: 'leftHip', end: 'leftKnee', type: 'hip' },
+            LeftLeg:   { start: 'leftKnee', end: 'leftAnkle', type: 'knee' },
+            RightUpLeg:{ start: 'rightHip', end: 'rightKnee', type: 'hip' },
+            RightLeg:  { start: 'rightKnee', end: 'rightAnkle', type: 'knee' },
+            Spine:     { start: 'spineBottom', end: 'spineTop', type: 'spine' },
+            Neck:      { start: 'spineTop', end: 'neckTop', type: 'neck' }
+        };
+
+        // ============================================================
+        // UTILITY: apply joint limits (clamp angles)
+        // ============================================================
+        function clampAngle(angle, min, max) {
+            while (angle > Math.PI) angle -= 2*Math.PI;
+            while (angle < -Math.PI) angle += 2*Math.PI;
+            return Math.min(Math.max(angle, min), max);
+        }
+
+        function applyJointConstraint(quat, boneName, type) {
+            // Convert quaternion to euler (XYZ) for clamping
+            const euler = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
+            let clamped = false;
+            if (type === 'elbow' || type === 'knee') {
+                // Hinge: clamp X (flexion) and zero out Y,Z
+                const lim = JOINT_LIMITS[type];
+                euler.x = clampAngle(euler.x, lim.min, lim.max);
+                euler.y = 0;
+                euler.z = 0;
+                clamped = true;
+            } else if (type === 'shoulder' || type === 'hip') {
+                // Cone constraint: limit total rotation around XZ
+                const lim = JOINT_LIMITS[type];
+                const halfCone = lim.cone;
+                // Simple cone: clamp magnitude of (x,z) and reduce y
+                const xz = Math.sqrt(euler.x*euler.x + euler.z*euler.z);
+                if (xz > halfCone) {
+                    const scale = halfCone / xz;
+                    euler.x *= scale;
+                    euler.z *= scale;
+                    clamped = true;
+                }
+                // Also limit y (internal/external rotation)
+                euler.y = clampAngle(euler.y, -0.8, 0.8);
+            } else if (type === 'spine' || type === 'neck') {
+                const lim = JOINT_LIMITS[type];
+                euler.x = clampAngle(euler.x, -lim.x, lim.x);
+                euler.y = clampAngle(euler.y, -lim.y, lim.y);
+                euler.z = clampAngle(euler.z, -lim.z, lim.z);
+                clamped = true;
+            }
+            if (clamped) {
+                quat.setFromEuler(euler);
+            }
+            return quat;
+        }
+
+        // ============================================================
+        // THREE.JS SETUP (with SKEL‑inspired skeleton)
+        // ============================================================
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            disposeThreeJS();
+           
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f111a);
+            scene.fog = new THREE.FogExp2(0x0f111a, 0.12);
+            
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(0, 1.2, 3);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+            
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 1.0, 0);
+            
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambient);
+            const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            keyLight.position.set(5, 8, 5);
+            keyLight.castShadow = true;
+            scene.add(keyLight);
+            
+            const grid = new THREE.GridHelper(10, 20, 0x14b8a6, 0x1e293b);
+            grid.position.y = 0;
+            scene.add(grid);
+            
+            const floorGeo = new THREE.PlaneGeometry(15, 15);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x090b11, roughness: 0.8 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -0.01;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            
+            // Build SKEL‑constrained procedural skeleton
+            buildConstrainedSkeleton();
+            animate();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildConstrainedSkeleton() {
+            if (loadedModel) scene.remove(loadedModel);
+            resolvedBones = {};
+            
+            const group = new THREE.Group();
+            const skeletonRoot = new THREE.Group();
+            group.add(skeletonRoot);
+            
+            // Create bones with SKEL‑inspired hierarchy
+            const hips = new THREE.Bone();
+            hips.name = "Hips";
+            hips.position.set(0, 1.0, 0);
+            skeletonRoot.add(hips);
+            resolvedBones.Hips = hips;
+            
+            const spine = new THREE.Bone();
+            spine.name = "Spine";
+            spine.position.set(0, 0.3, 0);
+            hips.add(spine);
+            resolvedBones.Spine = spine;
+            
+            const neck = new THREE.Bone();
+            neck.name = "Neck";
+            neck.position.set(0, 0.25, 0);
+            spine.add(neck);
+            resolvedBones.Neck = neck;
+            
+            // Arms & legs with SKEL bone axes
+            const limbs = [
+                { parent: spine, name: 'LeftArm', pos: [0.18, 0.12, 0], child: 'LeftForeArm', cpos: [0.28, 0, 0] },
+                { parent: spine, name: 'RightArm', pos: [-0.18, 0.12, 0], child: 'RightForeArm', cpos: [-0.28, 0, 0] },
+                { parent: hips, name: 'LeftUpLeg', pos: [0.1, -0.05, 0], child: 'LeftLeg', cpos: [0, -0.45, 0] },
+                { parent: hips, name: 'RightUpLeg', pos: [-0.1, -0.05, 0], child: 'RightLeg', cpos: [0, -0.45, 0] }
+            ];
+            
+            limbs.forEach(l => {
+                const pBone = new THREE.Bone();
+                pBone.name = l.name;
+                pBone.position.fromArray(l.pos);
+                l.parent.add(pBone);
+                resolvedBones[l.name] = pBone;
+                
+                const cBone = new THREE.Bone();
+                cBone.name = l.child;
+                cBone.position.fromArray(l.cpos);
+                pBone.add(cBone);
+                resolvedBones[l.child] = cBone;
             });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(0, part.height/2, 0);
-            bone.add(mesh);
-            this.boneMeshes[part.bone] = mesh;
-        });
-        
-        // Joint spheres
-        const sphereGeo = new THREE.SphereGeometry(0.035, 8, 8);
-        const sphereMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x3b82f6, emissiveIntensity: 0.3 });
-        for (const [name, bone] of Object.entries(this.bones)) {
-            if (!this.boneMeshes[name]) {
-                const sphere = new THREE.Mesh(sphereGeo.clone(), sphereMat.clone());
-                sphere.position.set(0, 0, 0);
-                bone.add(sphere);
-            }
+            
+            // Add feet
+            const leftFoot = new THREE.Bone();
+            leftFoot.name = "LeftFoot";
+            leftFoot.position.set(0, -0.45, 0.08);
+            resolvedBones.LeftLeg.add(leftFoot);
+            resolvedBones.LeftFoot = leftFoot;
+            
+            const rightFoot = new THREE.Bone();
+            rightFoot.name = "RightFoot";
+            rightFoot.position.set(0, -0.45, 0.08);
+            resolvedBones.RightLeg.add(rightFoot);
+            resolvedBones.RightFoot = rightFoot;
+            
+            // Visualize bones as small boxes
+            const boneMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, roughness: 0.2, metalness: 0.7 });
+            Object.values(resolvedBones).forEach(bone => {
+                const box = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), boneMat);
+                bone.add(box);
+            });
+            
+            scene.add(group);
+            loadedModel = group;
+            
+            // Store default bone axes for constraint application
+            cacheDefaultAxes();
+            
+            document.getElementById('model-info').innerHTML = `
+                <div><span class="font-semibold text-slate-300">Active Rig:</span> SKEL‑constrained skeleton</div>
+                <div class="text-xs text-slate-500">Biomechanical joint limits + bone‑aligned axes</div>
+            `;
         }
-    }
-    
-    /**
-     * Attach a loaded SKEL mesh to the skeleton
-     */
-    attachSKELMesh(meshGroup) {
-        // Remove default meshes if they exist
-        for (const [name, mesh] of Object.entries(this.boneMeshes)) {
-            const bone = this.bones[name];
-            if (bone && mesh.parent === bone) {
-                bone.remove(mesh);
-            }
-        }
-        this.boneMeshes = {};
-        
-        // Store the mesh group
-        this.skelMeshGroup = meshGroup;
-        this.group.add(meshGroup);
-        this.useSkelMesh = true;
-        
-        // Try to map bones from the SKEL mesh to our skeleton
-        this.mapSKELBones(meshGroup);
-    }
-    
-    /**
-     * Map bones from loaded SKEL mesh to our skeleton
-     */
-    mapSKELBones(meshGroup) {
-        const boneMap = {};
-        
-        // Find all bones in the loaded mesh
-        meshGroup.traverse((child) => {
-            if (child.isBone || child.type === 'Bone') {
-                // Try to match by name
-                const name = child.name.toLowerCase();
-                for (const [key, bone] of Object.entries(this.bones)) {
-                    const keyLower = key.toLowerCase();
-                    if (name.includes(keyLower) || keyLower.includes(name)) {
-                        boneMap[key] = child;
-                        break;
+
+        function cacheDefaultAxes() {
+            // Store default local direction for each bone (from parent)
+            KINEMATIC_CHAIN.forEach(([parent, child]) => {
+                const pBone = resolvedBones[parent];
+                const cBone = resolvedBones[child];
+                if (pBone && cBone) {
+                    const dir = cBone.position.clone().normalize();
+                    if (dir.length() > 0.001) {
+                        BONE_AXES[child] = dir;
                     }
                 }
+            });
+        }
+
+        // ============================================================
+        // POSE PROCESSING with SKEL constraints
+        // ============================================================
+        function onPoseAnalysis(results) {
+            // Chroma masking (simplified)
+            const canvasEl = document.getElementById('pip-canvas');
+            if (canvasEl && results.segmentationMask && results.image) {
+                if (canvasEl.width !== results.image.width || canvasEl.height !== results.image.height) {
+                    canvasEl.width = results.image.width;
+                    canvasEl.height = results.image.height;
+                }
+                const ctx = canvasEl.getContext('2d');
+                ctx.save();
+                ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+                ctx.drawImage(results.segmentationMask, 0, 0, canvasEl.width, canvasEl.height);
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = '#00FF00';
+                ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+                ctx.restore();
             }
-        });
-        
-        // If we found matches, replace our bones with the loaded ones
-        let matched = 0;
-        for (const [key, bone] of Object.entries(boneMap)) {
-            if (this.bones[key]) {
-                // Transfer position from original bone
-                const originalPos = this.bones[key].position.clone();
-                const originalParent = this.bones[key].parent;
-                
-                // Replace the bone
-                const parent = originalParent;
-                const idx = parent.children.indexOf(this.bones[key]);
-                if (idx !== -1) {
-                    parent.children[idx] = bone;
-                    bone.position.copy(originalPos);
-                    bone.parent = parent;
-                    this.bones[key] = bone;
-                    matched++;
+
+            if (!results.poseWorldLandmarks) return;
+            const worldLms = results.poseWorldLandmarks;
+            const jointCoords = {};
+            const minVis = 0.5;
+            
+            for (const [name, idx] of Object.entries(jointIndices)) {
+                const lm = worldLms[idx];
+                if (lm && lm.visibility > minVis) {
+                    jointCoords[name] = new THREE.Vector3(
+                        lm.x,
+                        -lm.y + 0.95,
+                        -lm.z
+                    );
                 }
             }
-        }
-        
-        console.log(`✅ Mapped ${matched} SKEL bones to avatar skeleton`);
-        document.getElementById('bone-count').textContent = matched + '/' + Object.keys(this.bones).length;
-        
-        // Update skeleton
-        const boneArray = Object.values(this.bones);
-        this.skeleton = new THREE.Skeleton(boneArray);
-    }
-    
-    /**
-     * Map MediaPipe landmarks to SKEL parameters
-     */
-    updateFromLandmarks(landmarks) {
-        if (!landmarks) return;
-        
-        const lShoulder = landmarks[JOINT_INDICES.leftShoulder];
-        const rShoulder = landmarks[JOINT_INDICES.rightShoulder];
-        const lElbow = landmarks[JOINT_INDICES.leftElbow];
-        const rElbow = landmarks[JOINT_INDICES.rightElbow];
-        const lWrist = landmarks[JOINT_INDICES.leftWrist];
-        const rWrist = landmarks[JOINT_INDICES.rightWrist];
-        const lHip = landmarks[JOINT_INDICES.leftHip];
-        const rHip = landmarks[JOINT_INDICES.rightHip];
-        const lKnee = landmarks[JOINT_INDICES.leftKnee];
-        const rKnee = landmarks[JOINT_INDICES.rightKnee];
-        const lAnkle = landmarks[JOINT_INDICES.leftAnkle];
-        const rAnkle = landmarks[JOINT_INDICES.rightAnkle];
-        
-        const spineCenter = this.midpoint(lShoulder, rShoulder);
-        const hipCenter = this.midpoint(lHip, rHip);
-        
-        // Update root position
-        if (hipCenter && this.bones.root) {
-            const scale = 1.2;
-            this.bones.root.position.x = hipCenter.x / scale;
-            this.bones.root.position.y = hipCenter.y / scale + 0.5;
-            this.bones.root.position.z = hipCenter.z / scale;
-        }
-        
-        // Update arms
-        this.updateArmChain('l', lShoulder, lElbow, lWrist);
-        this.updateArmChain('r', rShoulder, rElbow, rWrist);
-        
-        // Update legs
-        this.updateLegChain('l', lHip, lKnee, lAnkle);
-        this.updateLegChain('r', rHip, rKnee, rAnkle);
-        
-        // Update spine
-        if (hipCenter && spineCenter) {
-            const spineDir = new THREE.Vector3(
-                spineCenter.x - hipCenter.x,
-                spineCenter.y - hipCenter.y,
-                spineCenter.z - hipCenter.z
-            ).normalize();
             
-            const up = new THREE.Vector3(0, 1, 0);
-            const quat = new THREE.Quaternion().setFromUnitVectors(up, spineDir);
+            // Compute spine top/bottom
+            if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
+                jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
+            }
+            if (jointCoords.leftHip && jointCoords.rightHip) {
+                jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
+            }
+            // neckTop approximation
+            if (jointCoords.spineTop) {
+                jointCoords.neckTop = jointCoords.spineTop.clone().add(new THREE.Vector3(0, 0.12, 0));
+            }
             
-            if (this.bones.spine1) {
-                this.bones.spine1.quaternion.slerp(quat, 0.3);
+            // Apply SKEL constraints per bone
+            KINEMATIC_CHAIN.forEach(([parentName, childName]) => {
+                const parentBone = resolvedBones[parentName];
+                const childBone = resolvedBones[childName];
+                if (!parentBone || !childBone) return;
+                
+                const map = BONE_JOINT_MAP[childName];
+                if (!map) return;
+                const startPos = jointCoords[map.start];
+                const endPos = jointCoords[map.end];
+                if (!startPos || !endPos) return;
+                
+                // Compute direction in world space
+                const targetDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
+                // Transform to parent local space
+                const parentQuatInv = new THREE.Quaternion();
+                if (parentBone.parent) {
+                    parentBone.parent.getWorldQuaternion(parentQuatInv);
+                    parentQuatInv.invert();
+                }
+                const localDir = targetDir.clone().applyQuaternion(parentQuatInv);
+                const defaultDir = BONE_AXES[childName] || new THREE.Vector3(0, 1, 0);
+                
+                // Compute rotation from default to target
+                const quat = new THREE.Quaternion().setFromUnitVectors(defaultDir, localDir);
+                // Apply joint constraints based on type
+                const constrainedQuat = applyJointConstraint(quat, childName, map.type);
+                // Slerp for smoothness
+                childBone.quaternion.slerp(constrainedQuat, 0.3);
+            });
+            
+            // Root translation (Hips)
+            if (resolvedBones.Hips && jointCoords.spineBottom) {
+                const target = jointCoords.spineBottom;
+                const scale = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
+                resolvedBones.Hips.position.x += (target.x / scale - resolvedBones.Hips.position.x) * 0.15;
+                resolvedBones.Hips.position.y += (target.y / scale - resolvedBones.Hips.position.y) * 0.15;
+                resolvedBones.Hips.position.z += (target.z / scale - resolvedBones.Hips.position.z) * 0.15;
             }
         }
-    }
-    
-    updateArmChain(side, shoulder, elbow, wrist) {
-        if (!shoulder || !elbow || !wrist) return;
-        
-        const prefix = side === 'l' ? 'l' : 'r';
-        const upperArm = this.bones[prefix + 'UpperArm'];
-        const forearm = this.bones[prefix + 'Forearm'];
-        
-        if (!upperArm || !forearm) return;
-        
-        const armDir = new THREE.Vector3(
-            elbow.x - shoulder.x,
-            elbow.y - shoulder.y,
-            elbow.z - shoulder.z
-        );
-        const armLen = armDir.length();
-        if (armLen < 0.001) return;
-        armDir.normalize();
-        
-        const foreDir = new THREE.Vector3(
-            wrist.x - elbow.x,
-            wrist.y - elbow.y,
-            wrist.z - elbow.z
-        );
-        const foreLen = foreDir.length();
-        if (foreLen < 0.001) return;
-        foreDir.normalize();
-        
-        const up = new THREE.Vector3(0, 1, 0);
-        const quat = new THREE.Quaternion().setFromUnitVectors(up, armDir);
-        upperArm.quaternion.slerp(quat, 0.3);
-        
-        // Elbow flexion - biomechanically constrained to 0-145 degrees
-        const angle = Math.acos(Math.max(-1, Math.min(1, 
-            armDir.x * foreDir.x + armDir.y * foreDir.y + armDir.z * foreDir.z
-        )));
-        const clampedAngle = Math.max(0, Math.min(145, angle * 180 / Math.PI));
-        const rad = clampedAngle * Math.PI / 180;
-        
-        forearm.quaternion.setFromAxisAngle(
-            new THREE.Vector3(1, 0, 0),
-            rad * 0.5
-        );
-    }
-    
-    updateLegChain(side, hip, knee, ankle) {
-        if (!hip || !knee || !ankle) return;
-        
-        const prefix = side === 'l' ? 'l' : 'r';
-        const thigh = this.bones[prefix + 'Thigh'];
-        const shin = this.bones[prefix + 'Shin'];
-        
-        if (!thigh || !shin) return;
-        
-        const legDir = new THREE.Vector3(
-            knee.x - hip.x,
-            knee.y - hip.y,
-            knee.z - hip.z
-        );
-        const legLen = legDir.length();
-        if (legLen < 0.001) return;
-        legDir.normalize();
-        
-        const shinDir = new THREE.Vector3(
-            ankle.x - knee.x,
-            ankle.y - knee.y,
-            ankle.z - knee.z
-        );
-        const shinLen = shinDir.length();
-        if (shinLen < 0.001) return;
-        shinDir.normalize();
-        
-        const up = new THREE.Vector3(0, -1, 0);
-        const quat = new THREE.Quaternion().setFromUnitVectors(up, legDir);
-        thigh.quaternion.slerp(quat, 0.3);
-        
-        // Knee flexion - biomechanically constrained to 0-150 degrees
-        const angle = Math.acos(Math.max(-1, Math.min(1,
-            legDir.x * shinDir.x + legDir.y * shinDir.y + legDir.z * shinDir.z
-        )));
-        const clampedAngle = Math.max(0, Math.min(150, angle * 180 / Math.PI));
-        const rad = clampedAngle * Math.PI / 180;
-        
-        shin.quaternion.setFromAxisAngle(
-            new THREE.Vector3(1, 0, 0),
-            rad * 0.5
-        );
-    }
-    
-    midpoint(a, b) {
-        if (!a || !b) return null;
-        return new THREE.Vector3(
-            (a.x + b.x) / 2,
-            (a.y + b.y) / 2,
-            (a.z + b.z) / 2
-        );
-    }
-    
-    groundFeet(floorY) {
-        const lFoot = this.bones.lFoot;
-        const rFoot = this.bones.rFoot;
-        const lShin = this.bones.lShin;
-        const rShin = this.bones.rShin;
-        
-        if (lFoot && lFoot.position.y < floorY + 0.05) {
-            lFoot.position.y = floorY + 0.02;
-            if (lShin) lShin.position.y -= 0.02;
+
+        // ============================================================
+        // MODEL LOADING (unchanged, but uses constrained rig)
+        // ============================================================
+        function handleModelFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            loadCustomModel(url, file.name);
         }
-        if (rFoot && rFoot.position.y < floorY + 0.05) {
-            rFoot.position.y = floorY + 0.02;
-            if (rShin) rShin.position.y -= 0.02;
+
+        function loadFromURLInput() {
+            const url = document.getElementById('model-url').value.trim();
+            if (!url) return;
+            loadCustomModel(url, "External URL");
         }
-    }
-}
 
-// ============================================================
-// 3. THREE.JS SCENE SETUP
-// ============================================================
-
-function initScene() {
-    const container = document.getElementById('container');
-    
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a12);
-    scene.fog = new THREE.FogExp2(0x0a0a12, 0.05);
-    
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    
-    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(2, 1.5, 3.5);
-    
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    container.appendChild(renderer.domElement);
-    
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.0, 0);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.update();
-    
-    // Lighting
-    const ambient = new THREE.AmbientLight(0x404060, 0.5);
-    scene.add(ambient);
-    
-    const key = new THREE.DirectionalLight(0xffffff, 1.5);
-    key.position.set(5, 10, 5);
-    key.castShadow = true;
-    scene.add(key);
-    
-    const fill = new THREE.DirectionalLight(0x8888ff, 0.5);
-    fill.position.set(-5, 5, -5);
-    scene.add(fill);
-    
-    const rim = new THREE.DirectionalLight(0x60a5fa, 0.3);
-    rim.position.set(0, 0, 10);
-    scene.add(rim);
-    
-    // Ground
-    const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(20, 20),
-        new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 0.8 })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.01;
-    ground.receiveShadow = true;
-    scene.add(ground);
-    
-    // Grid
-    const grid = new THREE.GridHelper(10, 20, 0x1e293b, 0x1e293b);
-    grid.position.y = 0.001;
-    scene.add(grid);
-    
-    // Create avatar
-    avatar = new SKELAvatar(scene, false);
-    document.getElementById('bone-count').textContent = Object.keys(avatar.bones).length;
-    
-    window.addEventListener('resize', onResize);
-    animate();
-}
-
-function onResize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-}
-
-// ============================================================
-// 4. SKEL MESH LOADING
-// ============================================================
-
-function loadSKELMesh(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    const extension = file.name.split('.').pop().toLowerCase();
-    
-    document.getElementById('status-text').textContent = 'Loading SKEL mesh...';
-    document.getElementById('status-dot').className = 'dot yellow';
-    
-    const url = URL.createObjectURL(file);
-    
-    let loader;
-    if (extension === 'fbx') {
-        loader = new THREE.FBXLoader();
-    } else {
-        loader = new THREE.GLTFLoader();
-    }
-    
-    loader.load(url, (result) => {
-        let model;
-        if (extension === 'fbx') {
-            model = result;
-        } else {
-            model = result.scene;
-        }
-        
-        // Scale the model appropriately
-        const box = new THREE.Box3().setFromObject(model);
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        if (maxDim > 0) {
-            const targetHeight = 1.8;
-            const scale = targetHeight / maxDim;
-            model.scale.set(scale, scale, scale);
-        }
-        
-        // Center the model
-        const center = box.getCenter(new THREE.Vector3());
-        model.position.set(-center.x * model.scale.x, -center.y * model.scale.y, -center.z * model.scale.z);
-        
-        if (avatar) {
-            avatar.attachSKELMesh(model);
-            skelMeshLoaded = true;
-            document.getElementById('status-text').textContent = 'SKEL mesh loaded!';
-            document.getElementById('status-dot').className = 'dot green';
-        }
-        
-        URL.revokeObjectURL(url);
-    }, undefined, (err) => {
-        console.error('Failed to load SKEL mesh:', err);
-        document.getElementById('status-text').textContent = 'Error loading mesh';
-        document.getElementById('status-dot').className = 'dot red';
-        URL.revokeObjectURL(url);
-    });
-}
-
-// ============================================================
-// 5. MEDIAPIPE INTEGRATION
-// ============================================================
-
-function initMediaPipe() {
-    poseDetector = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
-    poseDetector.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-    poseDetector.onResults(onPoseResults);
-}
-
-function onPoseResults(results) {
-    if (!results.poseWorldLandmarks) return;
-    if (avatar) {
-        avatar.updateFromLandmarks(results.poseWorldLandmarks);
-        avatar.groundFeet(-0.01);
-    }
-}
-
-function startPoseProcessing(videoElement) {
-    if (processingLoop) return;
-    processingLoop = true;
-    
-    async function processFrame() {
-        if (!processingLoop) return;
-        if (videoElement.readyState >= 2) {
-            try {
-                await poseDetector.send({ image: videoElement });
-            } catch (e) {}
-        }
-        requestAnimationFrame(processFrame);
-    }
-    processFrame();
-}
-
-// ============================================================
-// 6. WEBRTC / PEERJS CONNECTIVITY
-// ============================================================
-
-function startDisplay() {
-    document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('hud').classList.add('active');
-    document.getElementById('controls').classList.add('active');
-    
-    // Generate 5-digit code
-    displayCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-    document.getElementById('display-code').textContent = displayCode;
-    document.getElementById('status-text').textContent = 'Waiting for phone...';
-    document.getElementById('status-dot').className = 'dot yellow';
-    
-    // Start PeerJS
-    peerId = 'SKEL-' + displayCode;
-    peer = new Peer(peerId);
-    
-    peer.on('open', () => {
-        document.getElementById('status-text').textContent = 'Ready - Enter code on phone';
-        document.getElementById('status-dot').className = 'dot blue';
-    });
-    
-    peer.on('error', (err) => {
-        console.error('Peer error:', err);
-        document.getElementById('status-text').textContent = 'Error: ' + err.message;
-        document.getElementById('status-dot').className = 'dot red';
-    });
-    
-    peer.on('call', (call) => {
-        document.getElementById('status-text').textContent = 'Phone connecting...';
-        document.getElementById('status-dot').className = 'dot yellow';
-        
-        call.answer();
-        activeCall = call;
-        
-        call.on('stream', (remoteStream) => {
-            const videoEl = document.createElement('video');
-            videoEl.srcObject = remoteStream;
-            videoEl.autoplay = true;
-            videoEl.playsInline = true;
-            videoEl.muted = true;
-            
-            videoEl.onloadedmetadata = () => {
-                videoEl.play();
-                document.getElementById('status-text').textContent = 'Connected!';
-                document.getElementById('status-dot').className = 'dot green';
+        function loadCustomModel(url, nameString) {
+            setStatus('loading', 'Loading Model...');
+            modelLoadAttempts++;
+            const isFBX = url.toLowerCase().includes('.fbx') || nameString.toLowerCase().includes('.fbx');
+            const loader = isFBX ? new THREE.FBXLoader() : new THREE.GLTFLoader();
+           
+            const loadCallback = (asset) => {
+                let model = isFBX ? asset : asset.scene;
+                if (loadedModel) scene.remove(loadedModel);
+                resolvedBones = {};
+                loadedModel = model;
+                scene.add(loadedModel);
                 
-                initMediaPipe();
-                startPoseProcessing(videoEl);
+                // Scale to match baseline
+                const box = new THREE.Box3().setFromObject(loadedModel);
+                const size = box.getSize(new THREE.Vector3());
+                if (size.y > 0.001) {
+                    const targetHeight = 1.65;
+                    const scale = targetHeight / size.y;
+                    loadedModel.scale.set(scale, scale, scale);
+                }
+                loadedModel.position.set(0, 0, 0);
+                
+                // Bone mapping (simplified, uses SKEL naming)
+                let boneCount = 0;
+                const boneMap = {
+                    'Hips': ['hips', 'pelvis', 'root'],
+                    'Spine': ['spine', 'chest', 'spine1'],
+                    'Neck': ['neck'],
+                    'LeftArm': ['leftarm', 'l_upperarm', 'upperarm_l'],
+                    'RightArm': ['rightarm', 'r_upperarm', 'upperarm_r'],
+                    'LeftForeArm': ['leftforearm', 'l_forearm', 'lowerarm_l'],
+                    'RightForeArm': ['rightforearm', 'r_forearm', 'lowerarm_r'],
+                    'LeftUpLeg': ['leftupleg', 'l_thigh', 'thigh_l'],
+                    'RightUpLeg': ['rightupleg', 'r_thigh', 'thigh_r'],
+                    'LeftLeg': ['leftleg', 'l_calf', 'calf_l'],
+                    'RightLeg': ['rightleg', 'r_calf', 'calf_r'],
+                    'LeftFoot': ['leftfoot', 'l_foot', 'foot_l'],
+                    'RightFoot': ['rightfoot', 'r_foot', 'foot_r']
+                };
+                
+                loadedModel.traverse((child) => {
+                    if (child.isBone || child.type === 'Bone') {
+                        boneCount++;
+                        const nameLower = child.name.toLowerCase();
+                        for (const [key, aliases] of Object.entries(boneMap)) {
+                            if (resolvedBones[key]) continue;
+                            for (const alias of aliases) {
+                                if (nameLower.includes(alias) || alias.includes(nameLower)) {
+                                    resolvedBones[key] = child;
+                                    break;
+                                }
+                            }
+                            if (resolvedBones[key]) break;
+                        }
+                    }
+                });
+                
+                // Fallback: if missing bones, use procedural skeleton
+                if (Object.keys(resolvedBones).length < 8) {
+                    buildConstrainedSkeleton();
+                    document.getElementById('model-info').innerHTML = `
+                        <div class="text-yellow-400">⚠️ Partial bone mapping — using procedural SKEL rig</div>
+                        <div class="text-[10px] text-slate-500">Matched ${Object.keys(resolvedBones).length} bones</div>
+                    `;
+                } else {
+                    cacheDefaultAxes();
+                    document.getElementById('model-info').innerHTML = `
+                        <div class="text-green-400">✓ Model loaded with SKEL constraints</div>
+                        <div class="text-[10px] text-slate-500">Matched ${Object.keys(resolvedBones).length} bones</div>
+                    `;
+                }
+                setStatus('connected', 'Skeletal Map Ready');
             };
-        });
-        
-        call.on('close', () => {
-            document.getElementById('status-text').textContent = 'Disconnected';
-            document.getElementById('status-dot').className = 'dot red';
-            processingLoop = false;
-        });
-    });
-    
-    // Set up scene
-    initScene();
-    
-    // Start FPS counter
-    setInterval(updateFPS, 500);
-}
 
-function startCamera() {
-    document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('phone-view').classList.add('active');
-    
-    // Focus the input
-    setTimeout(() => document.getElementById('peer-code').focus(), 500);
-    
-    peer = new Peer();
-    peer.on('error', (err) => {
-        alert('Connection error: ' + err.message);
-    });
-}
-
-function connectToDisplay() {
-    const code = document.getElementById('peer-code').value.trim().toUpperCase();
-    if (code.length !== 5) {
-        alert('Please enter a 5-digit code');
-        return;
-    }
-    
-    const targetId = 'SKEL-' + code;
-    document.getElementById('stream-status').textContent = 'Connecting to ' + targetId + '...';
-    
-    navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 360 }, height: { ideal: 640 } },
-        audio: false
-    }).then(stream => {
-        localStream = stream;
-        document.getElementById('local-video').srcObject = stream;
-        document.getElementById('phone-join').style.display = 'none';
-        document.getElementById('phone-stream').style.display = 'block';
-        
-        const call = peer.call(targetId, stream);
-        activeCall = call;
-        
-        call.on('close', () => {
-            alert('Connection lost');
-            disconnectStream();
-        });
-        
-        document.getElementById('stream-status').textContent = 'Streaming to ' + targetId + ' ✅';
-    }).catch(err => {
-        alert('Camera access denied: ' + err.message);
-    });
-}
-
-function disconnectStream() {
-    if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        localStream = null;
-    }
-    if (activeCall) {
-        activeCall.close();
-        activeCall = null;
-    }
-    document.getElementById('phone-join').style.display = 'block';
-    document.getElementById('phone-stream').style.display = 'none';
-    document.getElementById('phone-view').classList.remove('active');
-    document.getElementById('setup-screen').classList.remove('hidden');
-}
-
-// ============================================================
-// 7. UTILITIES
-// ============================================================
-
-function updateFPS() {
-    const fps = Math.round(frameCount / 0.5);
-    document.getElementById('fps-display').textContent = fps;
-    frameCount = 0;
-}
-
-// Override animate to count FPS
-const originalAnimate = animate;
-animate = function() {
-    frameCount++;
-    originalAnimate();
-};
-
-function resetApp() {
-    processingLoop = false;
-    if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        localStream = null;
-    }
-    if (activeCall) {
-        activeCall.close();
-        activeCall = null;
-    }
-    if (peer) {
-        peer.destroy();
-        peer = null;
-    }
-    
-    document.getElementById('setup-screen').classList.remove('hidden');
-    document.getElementById('phone-view').classList.remove('active');
-    document.getElementById('hud').classList.remove('active');
-    document.getElementById('controls').classList.remove('active');
-    document.getElementById('display-code').textContent = '-----';
-    document.getElementById('status-text').textContent = 'Ready';
-    document.getElementById('status-dot').className = 'dot green';
-    
-    if (renderer) {
-        renderer.dispose();
-        const container = document.getElementById('container');
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
+            const errorCallback = (err) => {
+                console.error(err);
+                alert("Could not parse model. Using procedural SKEL skeleton.");
+                buildConstrainedSkeleton();
+                setStatus('connected', 'Procedural SKEL');
+            };
+            loader.load(url, loadCallback, undefined, errorCallback);
         }
-    }
-    scene = camera = renderer = controls = avatar = null;
-    skelMeshLoaded = false;
-}
 
-// ============================================================
-// 8. KEYBOARD SHORTCUTS
-// ============================================================
+        // ============================================================
+        // STANDARD APP FUNCTIONS (reset, init, etc.)
+        // ============================================================
+        function resetApp() {
+            processingLoopActive = false;
+            if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+            if (activeCall) { activeCall.close(); activeCall = null; }
+            if (peer) { peer.destroy(); peer = null; }
+            disposeThreeJS();
+            window.removeEventListener('resize', onWindowResize);
+            setupView.classList.remove('hidden');
+            phoneView.classList.add('hidden');
+            displayView.classList.add('hidden');
+            document.getElementById('pip-container').classList.add('hidden');
+            document.getElementById('phone-input-container').classList.remove('hidden');
+            document.getElementById('phone-stream-container').classList.add('hidden');
+            const container = document.getElementById('canvas-container');
+            while (container.firstChild) container.removeChild(container.firstChild);
+            setStatus('offline', 'Offline');
+        }
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'r' || e.key === 'R') resetApp();
-    if (e.key === 'Enter' && document.getElementById('phone-view').classList.contains('active')) {
-        connectToDisplay();
-    }
-});
+        function disposeThreeJS() {
+            if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+            if (renderer) {
+                renderer.dispose();
+                if (renderer.domElement && renderer.domElement.parentNode)
+                    renderer.domElement.parentNode.removeChild(renderer.domElement);
+            }
+            if (loadedModel) {
+                loadedModel.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                        else child.material.dispose();
+                    }
+                });
+            }
+            scene = camera = renderer = controls = loadedModel = null;
+            resolvedBones = {};
+        }
 
-console.log('🎭 SKEL Mocap System Loaded');
-console.log('📱 Start as Display (PC) or Camera (Phone)');
-console.log('📁 Load a SKEL .glb/.fbx file to replace the default avatar');
-</script>
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function setStatus(status, label) {
+            const badge = document.getElementById('status-badge');
+            if (status === 'connected') {
+                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block"></span> ${label}`;
+                badge.className = "bg-green-950/40 border border-green-800/40 px-3 py-1 rounded-full text-xs font-semibold text-green-400 flex items-center gap-2";
+            } else if (status === 'loading') {
+                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-yellow-500 rounded-full inline-block animate-bounce"></span> ${label}`;
+                badge.className = "bg-yellow-950/40 border border-yellow-800/40 px-3 py-1 rounded-full text-xs font-semibold text-yellow-400 flex items-center gap-2";
+            } else {
+                badge.innerHTML = `<span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> ${label}`;
+                badge.className = "bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2";
+            }
+        }
+
+        function generateCode() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
+
+        // ============================================================
+        // PHONE MODE
+        // ============================================================
+        function startAsCamera() {
+            setupView.classList.add('hidden');
+            phoneView.classList.remove('hidden');
+            setStatus('offline', 'Source Mode');
+            peer = new Peer();
+            peer.on('error', (err) => { alert("Connection failed: " + err.message); resetApp(); });
+        }
+
+        async function connectToDisplay() {
+            const code = document.getElementById('target-peer-code').value.trim().toUpperCase();
+            if (!code || code.length !== 5) { alert("Enter 5-digit code."); return; }
+            setStatus('loading', 'Accessing Camera...');
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "user", width: { ideal: 360 }, height: { ideal: 640 } },
+                    audio: false
+                });
+                document.getElementById('local-video').srcObject = localStream;
+                document.getElementById('phone-input-container').classList.add('hidden');
+                document.getElementById('phone-stream-container').classList.remove('hidden');
+                setStatus('loading', 'Connecting...');
+                const target = "WM-MOCAP-" + code;
+                const call = peer.call(target, localStream);
+                activeCall = call;
+                call.on('close', () => { alert("Display disconnected."); resetApp(); });
+                setStatus('connected', 'Live Streaming');
+            } catch (err) {
+                console.error(err);
+                alert("Camera access failed. Use HTTPS or localhost.");
+                setStatus('offline', 'Camera Blocked');
+            }
+        }
+
+        // ============================================================
+        // DISPLAY MODE
+        // ============================================================
+        function startAsDisplay() {
+            setupView.classList.add('hidden');
+            displayView.classList.remove('hidden');
+            setStatus('loading', 'Initializing...');
+            initThreeJS();
+            initMediaPipe();
+            const pin = generateCode();
+            peerId = "WM-MOCAP-" + pin;
+            document.getElementById('display-peer-code').innerText = pin;
+            peer = new Peer(peerId);
+            peer.on('open', () => setStatus('offline', 'Awaiting Source...'));
+            peer.on('call', (call) => {
+                setStatus('loading', 'Opening Stream...');
+                call.answer();
+                activeCall = call;
+                call.on('stream', (stream) => {
+                    const video = document.getElementById('remote-video');
+                    document.getElementById('pip-container').classList.remove('hidden');
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        startFrameProcessing();
+                        setStatus('connected', 'Mocap Active');
+                    };
+                });
+                call.on('close', () => {
+                    document.getElementById('pip-container').classList.add('hidden');
+                    setStatus('offline', 'Disconnected');
+                });
+            });
+        }
+
+        function initMediaPipe() {
+            poseDetector = new Pose({
+                locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
+            });
+            poseDetector.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            poseDetector.onResults(onPoseAnalysis);
+        }
+
+        function startFrameProcessing() {
+            if (processingLoopActive) return;
+            processingLoopActive = true;
+            const video = document.getElementById('remote-video');
+            async function processFrame() {
+                if (!processingLoopActive) return;
+                const now = Date.now();
+                if (now - lastProcessed > 40) {
+                    if (video.readyState >= 2) {
+                        try { await poseDetector.send({ image: video }); } catch (e) {}
+                    }
+                    lastProcessed = now;
+                }
+                requestAnimationFrame(processFrame);
+            }
+            processFrame();
+        }
+
+        // ============================================================
+        // GLOBAL EXPOSURE
+        // ============================================================
+        window.startAsDisplay = startAsDisplay;
+        window.startAsCamera = startAsCamera;
+        window.connectToDisplay = connectToDisplay;
+        window.resetApp = resetApp;
+        window.handleModelFile = handleModelFile;
+        window.loadFromURLInput = loadFromURLInput;
+    </script>
 </body>
 </html>
