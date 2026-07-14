@@ -341,9 +341,6 @@
             }
         }
 
-        const jointOneEuroFilters = {};
-        const jointKalmanFilters = {};
-
         // ============================================================
         // FABRIK INVERSE KINEMATICS SOLVER
         // ============================================================
@@ -438,7 +435,7 @@
         const footEngineRight = new FootGroundingEngine('Right');
 
         // ============================================================
-        // ARM OCCLUSION MANAGER (Fallback Parking Engine)
+        // ARM OCCLUSION MANAGER (Anatomical Resting & Soft Reset)
         // ============================================================
         class ArmOcclusionManager {
             constructor(sideName) {
@@ -447,7 +444,6 @@
                 this.parkedArmQuat = new THREE.Quaternion();
                 this.parkedForeArmQuat = new THREE.Quaternion(); 
 
-                // Establish a natural resting pose hanging by the torso side
                 if (this.side === "Left") {
                     this.parkedArmQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI * 0.42);
                 } else {
@@ -474,7 +470,176 @@
         const rightArmManager = new ArmOcclusionManager("Right");
 
         // ============================================================
-        // COMPILED SKEL CONSTRAINTS
+        // COMPILED HUMAN POSE ESTIMATOR (SKEL-Aligned Module)
+        // Offline AI Factory → Deterministic Browser Runtime
+        // ============================================================
+        class CompiledPoseEstimator {
+            constructor() {
+                this.jointFilters = {};
+                this.history = []; 
+                this.maxHistory = 30;
+                
+                this.skelConfig = {
+                    joints: {
+                        hips:      { dof: 3, parent: null },
+                        spine:     { dof: 3, parent: 'hips' },
+                        neck:      { dof: 3, parent: 'spine' },
+                        leftShoulder: { dof: 3, parent: 'spine', axisBias: new THREE.Vector3(1,0,0) },
+                        leftElbow:    { dof: 1, parent: 'leftShoulder', hingeAxis: new THREE.Vector3(0,1,0) }, 
+                        leftWrist:    { dof: 3, parent: 'leftElbow' },
+                        leftHip:   { dof: 3, parent: 'hips' },
+                        leftKnee:  { dof: 1, parent: 'leftHip', hingeAxis: new THREE.Vector3(1,0,0) },
+                        leftAnkle: { dof: 3, parent: 'leftKnee' }
+                    }
+                };
+            }
+
+            estimate(worldLandmarks, timestamp) {
+                if (!worldLandmarks) return null;
+
+                let rawPose = this.extractLandmarks(worldLandmarks);
+                let filtered = this.applyFilters(rawPose, timestamp);
+                let biomech = this.applySKELConstraints(filtered);
+                let completed = this.handleOcclusions(biomech); 
+
+                this.history.push({ pose: JSON.parse(JSON.stringify(completed)), ts: timestamp });
+                if (this.history.length > this.maxHistory) this.history.shift();
+
+                return completed;
+            }
+
+            extractLandmarks(landmarks) {
+                const pose = {};
+                const map = {
+                    nose: 0, leftShoulder: 11, rightShoulder: 12,
+                    leftElbow: 13, rightElbow: 14, leftWrist: 15, rightWrist: 16,
+                    leftHip: 23, rightHip: 24, leftKnee: 25, rightKnee: 26,
+                    leftAnkle: 27, rightAnkle: 28, leftHeel: 29, rightHeel: 30
+                };
+
+                Object.keys(map).forEach(key => {
+                    const lm = landmarks[map[key]];
+                    if (lm) {
+                        pose[key] = new THREE.Vector3(-lm.x, -lm.y + 1.0, -lm.z);
+                        pose[key].visibility = lm.visibility !== undefined ? lm.visibility : 0.5;
+                    }
+                });
+
+                if (pose.leftShoulder && pose.rightShoulder) {
+                    pose.spineTop = new THREE.Vector3().addVectors(pose.leftShoulder, pose.rightShoulder).multiplyScalar(0.5);
+                    pose.spineTop.visibility = Math.min(pose.leftShoulder.visibility, pose.rightShoulder.visibility);
+                }
+                if (pose.leftHip && pose.rightHip) {
+                    pose.spineBottom = new THREE.Vector3().addVectors(pose.leftHip, pose.rightHip).multiplyScalar(0.5);
+                    pose.spineBottom.visibility = Math.min(pose.leftHip.visibility, pose.rightHip.visibility);
+                }
+                if (pose.spineTop) {
+                    pose.neckTop = pose.spineTop.clone().add(new THREE.Vector3(0, 0.15, 0));
+                    pose.neckTop.visibility = pose.spineTop.visibility;
+                }
+
+                return pose;
+            }
+
+            applyFilters(pose, timestamp) {
+                const useOneEuro = document.getElementById('toggle-one-euro').checked;
+                const useKalman = document.getElementById('toggle-kalman').checked;
+
+                Object.keys(pose).forEach(key => {
+                    if (!this.jointFilters[key]) {
+                        const cutoff = parseFloat(document.getElementById('slider-min-cutoff').value);
+                        const beta = parseFloat(document.getElementById('slider-beta').value);
+                        this.jointFilters[key] = {
+                            oneEuro: new OneEuroFilter3D(cutoff, beta),
+                            kalman: new KalmanFilter3D()
+                        };
+                    }
+                    if (pose[key] instanceof THREE.Vector3) {
+                        let filtered = pose[key].clone();
+                        if (useOneEuro) {
+                            filtered = this.jointFilters[key].oneEuro.filter(filtered, timestamp);
+                        }
+                        if (useKalman) {
+                            filtered = this.jointFilters[key].kalman.filter(filtered);
+                        }
+                        filtered.visibility = pose[key].visibility;
+                        pose[key] = filtered;
+                    }
+                });
+                return pose;
+            }
+
+            applySKELConstraints(pose) {
+                const constrained = {};
+                Object.keys(pose).forEach(k => {
+                    if (pose[k] instanceof THREE.Vector3) {
+                        constrained[k] = pose[k].clone();
+                        constrained[k].visibility = pose[k].visibility;
+                    }
+                });
+
+                const useSkelConstraints = document.getElementById('toggle-skel-constraints').checked;
+                if (!useSkelConstraints) return constrained;
+
+                // Knee hinge constraint
+                if (constrained.leftHip && constrained.leftKnee && constrained.leftAnkle) {
+                    this.enforceHinge(constrained, 'leftHip', 'leftKnee', 'leftAnkle', new THREE.Vector3(1, 0, 0));
+                }
+                if (constrained.rightHip && constrained.rightKnee && constrained.rightAnkle) {
+                    this.enforceHinge(constrained, 'rightHip', 'rightKnee', 'rightAnkle', new THREE.Vector3(-1, 0, 0));
+                }
+
+                // Elbow hinge constraint
+                if (constrained.leftShoulder && constrained.leftElbow && constrained.leftWrist) {
+                    this.enforceHinge(constrained, 'leftShoulder', 'leftElbow', 'leftWrist', new THREE.Vector3(0, 1, 0));
+                }
+                if (constrained.rightShoulder && constrained.rightElbow && constrained.rightWrist) {
+                    this.enforceHinge(constrained, 'rightShoulder', 'rightElbow', 'rightWrist', new THREE.Vector3(0, -1, 0));
+                }
+
+                return constrained;
+            }
+
+            enforceHinge(pose, rootKey, midKey, endKey, hingeAxis) {
+                const root = pose[rootKey];
+                const mid = pose[midKey];
+                const end = pose[endKey];
+                if (!root || !mid || !end) return;
+
+                const upperLen = root.distanceTo(mid);
+                const lowerLen = mid.distanceTo(end);
+
+                const dir = new THREE.Vector3().subVectors(end, root).normalize();
+                const projected = dir.projectOnPlane(hingeAxis).normalize();
+
+                mid.copy(root).addScaledVector(projected, upperLen);
+                end.copy(mid).addScaledVector(projected, lowerLen);
+            }
+
+            handleOcclusions(pose) {
+                const lowVisJoints = Object.keys(pose).filter(k => 
+                    pose[k] && pose[k].visibility < 0.45
+                );
+
+                if (lowVisJoints.length === 0) return pose;
+
+                if (this.history.length > 5) {
+                    const lastValid = this.history[this.history.length - 1].pose;
+                    lowVisJoints.forEach(key => {
+                        if (lastValid && lastValid[key]) {
+                            pose[key].copy(lastValid[key]);
+                            pose[key].visibility = lastValid[key].visibility; 
+                        }
+                    });
+                }
+                return pose;
+            }
+        }
+
+        const poseEstimator = new CompiledPoseEstimator();
+
+        // ============================================================
+        // COMPILED SKEL ANATOMICAL CONFIGURATIONS
         // ============================================================
         const JOINT_LIMITS = {
             elbow: { min: -0.05, max: 2.3 }, 
@@ -537,12 +702,6 @@
             Spine:     { start: 'spineBottom', end: 'spineTop', type: 'spine' },
             Neck:      { start: 'spineTop', end: 'neckTop', type: 'neck' }
         };
-
-        function clampAngle(angle, min, max) {
-            while (angle > Math.PI) angle -= 2.0 * Math.PI;
-            while (angle < -Math.PI) angle += 2.0 * Math.PI;
-            return Math.min(Math.max(angle, min), max);
-        }
 
         function applyJointConstraint(quat, boneName, type) {
             const euler = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
@@ -763,93 +922,57 @@
             }
 
             if (!results.poseWorldLandmarks) return;
-            const worldLms = results.poseWorldLandmarks;
-            const jointCoords = {};
-            const minVis = 0.45;
 
-            const useOneEuro = document.getElementById('toggle-one-euro').checked;
-            const useKalman = document.getElementById('toggle-kalman').checked;
+            // Execute estimation flow through the custom compiled pose class
+            const estimatedPose = poseEstimator.estimate(results.poseWorldLandmarks, timestamp);
+            if (!estimatedPose) return;
+
             const useFootLocking = document.getElementById('toggle-foot-locking').checked;
             const useSkelConstraints = document.getElementById('toggle-skel-constraints').checked;
             const useTorsoSpin = document.getElementById('toggle-torso-spin').checked;
             const useOcclusionParking = document.getElementById('toggle-occlusion-parking').checked;
 
-            // Pipeline Step 1: Coordinate Extraction & Filtering
-            for (const [name, idx] of Object.entries(jointIndices)) {
-                const lm = worldLms[idx];
-                if (lm && lm.visibility > minVis) {
-                    let rawPos = new THREE.Vector3(-lm.x, -lm.y + 1.0, -lm.z);
-
-                    if (!jointOneEuroFilters[name]) {
-                        const cutoff = parseFloat(document.getElementById('slider-min-cutoff').value);
-                        const beta = parseFloat(document.getElementById('slider-beta').value);
-                        jointOneEuroFilters[name] = new OneEuroFilter3D(cutoff, beta);
-                        jointKalmanFilters[name] = new KalmanFilter3D();
-                    }
-
-                    let filteredPos = rawPos.clone();
-                    if (useOneEuro) {
-                        filteredPos = jointOneEuroFilters[name].filter(filteredPos, timestamp);
-                    }
-                    if (useKalman) {
-                        filteredPos = jointKalmanFilters[name].filter(filteredPos);
-                    }
-
-                    jointCoords[name] = filteredPos;
-                }
-            }
-
-            if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
-                jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
-            }
-            if (jointCoords.leftHip && jointCoords.rightHip) {
-                jointCoords.spineBottom = new THREE.Vector3().addVectors(jointCoords.leftHip, jointCoords.rightHip).multiplyScalar(0.5);
-            }
-            if (jointCoords.spineTop) {
-                jointCoords.neckTop = jointCoords.spineTop.clone().add(new THREE.Vector3(0, 0.15, 0));
-            }
-
             const dt = latency / 1000.0;
 
-            // Pipeline Step 2: Foot Grounding Engine
-            if (jointCoords.leftAnkle) {
-                const initialLeft = jointCoords.leftAnkle.clone();
+            // Pipeline Step 1: Foot Grounding Engine
+            if (estimatedPose.leftAnkle) {
+                const initialLeft = estimatedPose.leftAnkle.clone();
                 const processedLeft = footEngineLeft.process(initialLeft, 0.02, dt, useFootLocking);
-                jointCoords.leftAnkle.copy(processedLeft);
+                estimatedPose.leftAnkle.copy(processedLeft);
             }
-            if (jointCoords.rightAnkle) {
-                const initialRight = jointCoords.rightAnkle.clone();
+            if (estimatedPose.rightAnkle) {
+                const initialRight = estimatedPose.rightAnkle.clone();
                 const processedRight = footEngineRight.process(initialRight, 0.02, dt, useFootLocking);
-                jointCoords.rightAnkle.copy(processedRight);
+                estimatedPose.rightAnkle.copy(processedRight);
             }
 
-            // Pipeline Step 3: Leg IK Refinement via FABRIK Solver
-            if (jointCoords.leftHip && jointCoords.leftKnee && jointCoords.leftAnkle) {
-                const points = [jointCoords.leftHip, jointCoords.leftKnee, jointCoords.leftAnkle];
+            // Pipeline Step 2: Leg IK Refinement via FABRIK Solver
+            if (estimatedPose.leftHip && estimatedPose.leftKnee && estimatedPose.leftAnkle) {
+                const points = [estimatedPose.leftHip, estimatedPose.leftKnee, estimatedPose.leftAnkle];
                 const boneLengths = [
-                    jointCoords.leftHip.distanceTo(jointCoords.leftKnee),
-                    jointCoords.leftKnee.distanceTo(jointCoords.leftAnkle)
+                    estimatedPose.leftHip.distanceTo(estimatedPose.leftKnee),
+                    estimatedPose.leftKnee.distanceTo(estimatedPose.leftAnkle)
                 ];
-                const solved = FABRIKSolver3D.solveChain(points, jointCoords.leftAnkle, boneLengths);
-                jointCoords.leftHip.copy(solved[0]);
-                jointCoords.leftKnee.copy(solved[1]);
-                jointCoords.leftAnkle.copy(solved[2]);
+                const solved = FABRIKSolver3D.solveChain(points, estimatedPose.leftAnkle, boneLengths);
+                estimatedPose.leftHip.copy(solved[0]);
+                estimatedPose.leftKnee.copy(solved[1]);
+                estimatedPose.leftAnkle.copy(solved[2]);
             }
-            if (jointCoords.rightHip && jointCoords.rightKnee && jointCoords.rightAnkle) {
-                const points = [jointCoords.rightHip, jointCoords.rightKnee, jointCoords.rightAnkle];
+            if (estimatedPose.rightHip && estimatedPose.rightKnee && estimatedPose.rightAnkle) {
+                const points = [estimatedPose.rightHip, estimatedPose.rightKnee, estimatedPose.rightAnkle];
                 const boneLengths = [
-                    jointCoords.rightHip.distanceTo(jointCoords.rightKnee),
-                    jointCoords.rightKnee.distanceTo(jointCoords.rightAnkle)
+                    estimatedPose.rightHip.distanceTo(estimatedPose.rightKnee),
+                    estimatedPose.rightKnee.distanceTo(estimatedPose.rightAnkle)
                 ];
-                const solved = FABRIKSolver3D.solveChain(points, jointCoords.rightAnkle, boneLengths);
-                jointCoords.rightHip.copy(solved[0]);
-                jointCoords.rightKnee.copy(solved[1]);
-                jointCoords.rightAnkle.copy(solved[2]);
+                const solved = FABRIKSolver3D.solveChain(points, estimatedPose.rightAnkle, boneLengths);
+                estimatedPose.rightHip.copy(solved[0]);
+                estimatedPose.rightKnee.copy(solved[1]);
+                estimatedPose.rightAnkle.copy(solved[2]);
             }
 
-            // Pipeline Step 4: 360° Torso Spin Tracking Logic
-            if (resolvedBones.Hips && jointCoords.leftShoulder && jointCoords.rightShoulder) {
-                const shoulderVec = new THREE.Vector3().subVectors(jointCoords.leftShoulder, jointCoords.rightShoulder);
+            // Pipeline Step 3: 360° Torso Spin Tracking Logic
+            if (resolvedBones.Hips && estimatedPose.leftShoulder && estimatedPose.rightShoulder) {
+                const shoulderVec = new THREE.Vector3().subVectors(estimatedPose.leftShoulder, estimatedPose.rightShoulder);
                 shoulderVec.y = 0;
                 shoulderVec.normalize();
                 
@@ -868,7 +991,7 @@
                 document.getElementById('diag-torso').className = isBack ? "text-yellow-400 font-bold" : "text-slate-200";
             }
 
-            // Pipeline Step 5: Map kinematic chain rotations with limits & occlusion parking
+            // Pipeline Step 4: Map kinematic chain rotations with constraints & dynamic parking
             KINEMATIC_CHAIN.forEach(([parentName, childName]) => {
                 const parentBone = resolvedBones[parentName];
                 const childBone = resolvedBones[childName];
@@ -876,8 +999,8 @@
                 
                 const map = BONE_JOINT_MAP[childName];
                 if (!map) return;
-                const startPos = jointCoords[map.start];
-                const endPos = jointCoords[map.end];
+                const startPos = estimatedPose[map.start];
+                const endPos = estimatedPose[map.end];
                 if (!startPos || !endPos) return;
                 
                 const targetDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
@@ -897,10 +1020,12 @@
 
                 // Smooth Arm Occlusion Parking Process
                 if (childName === 'LeftArm' || childName === 'LeftForeArm') {
-                    const vis = (worldLms[jointIndices.leftElbow]?.visibility || 1.0) * (worldLms[jointIndices.leftWrist]?.visibility || 1.0);
+                    const vis = (estimatedPose.leftElbow ? estimatedPose.leftElbow.visibility : 1.0) * 
+                                (estimatedPose.leftWrist ? estimatedPose.leftWrist.visibility : 1.0);
                     quat = leftArmManager.process(vis, quat, childName, useOcclusionParking);
                 } else if (childName === 'RightArm' || childName === 'RightForeArm') {
-                    const vis = (worldLms[jointIndices.rightElbow]?.visibility || 1.0) * (worldLms[jointIndices.rightWrist]?.visibility || 1.0);
+                    const vis = (estimatedPose.rightElbow ? estimatedPose.rightElbow.visibility : 1.0) * 
+                                (estimatedPose.rightWrist ? estimatedPose.rightWrist.visibility : 1.0);
                     quat = rightArmManager.process(vis, quat, childName, useOcclusionParking);
                 }
 
@@ -908,8 +1033,8 @@
             });
             
             // Reconcile world translation offsets
-            if (resolvedBones.Hips && jointCoords.spineBottom) {
-                const target = jointCoords.spineBottom;
+            if (resolvedBones.Hips && estimatedPose.spineBottom) {
+                const target = estimatedPose.spineBottom;
                 const scale = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 resolvedBones.Hips.position.x += (target.x / scale - resolvedBones.Hips.position.x) * 0.15;
                 resolvedBones.Hips.position.y += (target.y / scale - resolvedBones.Hips.position.y) * 0.15;
@@ -939,10 +1064,15 @@
             document.getElementById('min-cutoff-val').textContent = cutoff.toFixed(2);
             document.getElementById('beta-val').textContent = beta.toFixed(3);
 
-            Object.values(jointOneEuroFilters).forEach(f => {
-                f.minCutoff = cutoff;
-                f.beta = beta;
-            });
+            // Dynamically propagate values directly into the active CompiledPoseEstimator filters
+            if (poseEstimator && poseEstimator.jointFilters) {
+                Object.values(poseEstimator.jointFilters).forEach(f => {
+                    if (f.oneEuro) {
+                        f.oneEuro.minCutoff = cutoff;
+                        f.oneEuro.beta = beta;
+                    }
+                });
+            }
         }
 
         // ============================================================
