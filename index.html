@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Skel-Mirror Pro · 3D Web-Mocap Studio</title>
+    <title>SKEL‑Mirror Pro · Live Biomechanical MoCap</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -52,7 +52,7 @@
     <header class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between z-10 shrink-0">
         <div class="flex items-center gap-2">
             <span class="text-xl font-bold tracking-wider text-teal-400">⚡ SKEL‑Mirror Pro</span>
-            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">Biomechanical Constraints Active</span>
+            <span class="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-mono hidden sm:inline-block">Compiled Biomechanics Active</span>
         </div>
         <div id="status-badge" class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-slate-400 flex items-center gap-2">
             <span class="w-2.5 h-2.5 bg-red-500 rounded-full inline-block animate-pulse"></span> Offline
@@ -66,12 +66,12 @@
             <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
                 <div>
                     <h2 class="text-2xl font-bold mb-2 text-white">Choose Your Device Role</h2>
-                    <p class="text-sm text-slate-400">Biomechanically accurate SKEL constraints applied including dynamic One Euro Filtering, Kalman prediction, and Foot-Ground contact resolution.</p>
+                    <p class="text-sm text-slate-400">Compiled SKEL constraints + deterministic runtime. Offline AI rules → browser execution.</p>
                 </div>
                 <div class="space-y-4">
                     <button onclick="startAsDisplay()" class="w-full p-4 bg-teal-600 hover:bg-teal-500 rounded-xl font-semibold shadow-lg shadow-teal-900/30 transition-all duration-200">
                         🖥️ Display Screen (PC/Laptop)
-                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models, applies SKEL‑inspired biomechanics</span>
+                        <span class="block text-xs font-normal text-teal-100 mt-1">Loads 3D models, applies compiled SKEL biomechanics</span>
                     </button>
                     <div class="flex items-center justify-center gap-2 my-2 text-xs text-slate-500">
                         <span class="h-px bg-slate-800 flex-grow"></span> OR <span class="h-px bg-slate-800 flex-grow"></span>
@@ -112,7 +112,7 @@
         <div id="display-view" class="hidden absolute inset-0 w-full h-full">
             <div id="canvas-container" class="w-full h-full absolute inset-0 bg-slate-950"></div>
             
-            <!-- Dashboard (Sleeker and Scrollable) -->
+            <!-- Dashboard -->
             <div id="display-dashboard" class="absolute top-4 left-4 bg-slate-900/95 border border-slate-800 p-4 rounded-2xl shadow-2xl max-w-sm w-80 z-20 space-y-3 backdrop-blur pointer-events-auto flex flex-col max-h-[92vh] overflow-hidden">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2 shrink-0">
                     <h3 class="font-bold text-sm tracking-wide text-white">Rig Dashboard Pro</h3>
@@ -189,7 +189,15 @@
                             </label>
                             <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                 <input type="checkbox" id="toggle-skel-constraints" checked class="accent-teal-500">
-                                <span>Enforce SKEL Bone Limits</span>
+                                <span>Enforce Compiled SKEL Limits</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" id="toggle-torso-spin" checked class="accent-teal-500">
+                                <span>360° Torso Spin Tracking</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" id="toggle-occlusion-parking" checked class="accent-teal-500">
+                                <span>Arm Occlusion Parking</span>
                             </label>
                         </div>
                     </div>
@@ -207,14 +215,14 @@
                         <div class="text-teal-400 border-b border-slate-900 pb-1 font-semibold uppercase tracking-wider text-[9px]">Live Diagnostics</div>
                         <div class="flex justify-between"><span>Tracking FPS:</span><span id="diag-fps" class="text-slate-200">-</span></div>
                         <div class="flex justify-between"><span>Proc Latency:</span><span id="diag-latency" class="text-slate-200">- ms</span></div>
-                        <div class="flex justify-between"><span>L Foot State:</span><span id="diag-foot-l" class="text-slate-200">Free</span></div>
-                        <div class="flex justify-between"><span>R Foot State:</span><span id="diag-foot-r" class="text-slate-200">Free</span></div>
-                        <div class="flex justify-between"><span>Torso Orientation:</span><span id="diag-torso-normal" class="text-slate-200">0.0</span></div>
+                        <div class="flex justify-between"><span>Torso Normal:</span><span id="diag-torso" class="text-slate-200">Front</span></div>
+                        <div class="flex justify-between"><span>L Arm State:</span><span id="diag-foot-l" class="text-slate-200">Active</span></div>
+                        <div class="flex justify-between"><span>R Arm State:</span><span id="diag-foot-r" class="text-slate-200">Active</span></div>
                     </div>
                 </div>
                 
                 <div id="model-info" class="text-[10px] text-slate-400 border-t border-slate-800 pt-2 shrink-0 space-y-0.5">
-                    <div><span class="font-semibold text-slate-300">Biomechanical Pipeline:</span> One Euro Filter, Kalman Prediction, FABRIK Leg Solver, Foot-Locking.</div>
+                    <div><span class="font-semibold text-slate-300">Compiled Pipeline:</span> One Euro, Kalman, SKEL Limits, Deterministic Mapping</div>
                 </div>
             </div>
             
@@ -279,17 +287,11 @@
                 this.lastTime = timestamp;
                 if (dt <= 0) return this.x.clone();
 
-                // D_value
                 const dValue = new THREE.Vector3().subVectors(value, this.x).multiplyScalar(1.0 / dt);
-                
-                // Low-pass filter derivative
                 const alphaD = this.smoothingFactor(dt, this.dcutoff);
                 this.dx.lerp(dValue, alphaD);
 
-                // Cutoff based on velocity
                 const cutoff = this.minCutoff + this.beta * this.dx.length();
-                
-                // Low-pass filter value
                 const alpha = this.smoothingFactor(dt, cutoff);
                 this.x.lerp(value, alpha);
 
@@ -326,10 +328,7 @@
                     return measurement.clone();
                 }
 
-                // Prediction Step
                 this.cov += this.q;
-
-                // Measurement Update Step
                 const gain = this.cov / (this.cov + this.r);
                 this.estimatedVal.lerp(measurement, gain);
                 this.cov *= (1.0 - gain);
@@ -342,24 +341,21 @@
             }
         }
 
-        // Initialize Filter storage dicts
         const jointOneEuroFilters = {};
         const jointKalmanFilters = {};
 
         // ============================================================
-        // FABRIK INVERSE KINEMATICS SOLVER (Forward And Backward Reaching)
+        // FABRIK INVERSE KINEMATICS SOLVER
         // ============================================================
         class FABRIKSolver3D {
             static solveChain(points, target, boneLengths, maxIterations = 10, tolerance = 0.01) {
                 const chainLength = points.length;
                 if (chainLength < 2) return points;
 
-                // Convert points to THREE.Vector3 references
                 const positions = points.map(p => p.clone());
                 const root = positions[0].clone();
                 const totalLength = boneLengths.reduce((a, b) => a + b, 0);
 
-                // Unreachable state
                 if (root.distanceTo(target) > totalLength) {
                     const dir = new THREE.Vector3().subVectors(target, root).normalize();
                     for (let i = 1; i < chainLength; i++) {
@@ -368,18 +364,17 @@
                     return positions;
                 }
 
-                // Reachable State iteration
                 for (let iter = 0; iter < maxIterations; iter++) {
                     if (positions[chainLength - 1].distanceTo(target) < tolerance) break;
 
-                    // BACKWARD PASS (Starting at End-Effector target)
+                    // BACKWARD PASS
                     positions[chainLength - 1].copy(target);
                     for (let i = chainLength - 2; i >= 0; i--) {
                         const dir = new THREE.Vector3().subVectors(positions[i], positions[i+1]).normalize();
                         positions[i].copy(positions[i+1]).addScaledVector(dir, boneLengths[i]);
                     }
 
-                    // FORWARD PASS (Starting at original Joint Root)
+                    // FORWARD PASS
                     positions[0].copy(root);
                     for (let i = 1; i < chainLength; i++) {
                         const dir = new THREE.Vector3().subVectors(positions[i], positions[i-1]).normalize();
@@ -391,19 +386,18 @@
         }
 
         // ============================================================
-        // FOOT GROUND LOCKING STATE ENGINE
+        // FOOT GROUND LOCKING ENGINE
         // ============================================================
         class FootGroundingEngine {
             constructor(sideName) {
                 this.side = sideName;
                 this.isLocked = false;
                 this.lockedPos = new THREE.Vector3();
-                this.velHistory = [];
                 this.lastPos = new THREE.Vector3();
-                this.thresholdSpeed = 0.4; // m/s
-                this.thresholdHeight = 0.12; // metric relative height
+                this.thresholdSpeed = 0.4; 
+                this.thresholdHeight = 0.12; 
                 this.lockFrameCounter = 0;
-                this.requiredFrames = 3; // Hysteresis prevention
+                this.requiredFrames = 3; 
             }
 
             process(anklePos, groundPlaneY, dt, enforceLocking) {
@@ -418,8 +412,6 @@
                 this.lastPos.copy(anklePos);
 
                 const currentHeight = anklePos.y - groundPlaneY;
-
-                // Locking triggers if foot is low and near static velocity boundary
                 const velocityCondition = speed < this.thresholdSpeed;
                 const heightCondition = currentHeight < this.thresholdHeight;
 
@@ -428,7 +420,7 @@
                     if (this.lockFrameCounter >= this.requiredFrames && !this.isLocked) {
                         this.isLocked = true;
                         this.lockedPos.copy(anklePos);
-                        this.lockedPos.y = groundPlaneY; // Snap onto absolute ground surface plane
+                        this.lockedPos.y = groundPlaneY; 
                     }
                 } else {
                     this.lockFrameCounter = 0;
@@ -446,35 +438,34 @@
         const footEngineRight = new FootGroundingEngine('Right');
 
         // ============================================================
-        // ARM OCCLUSION STATE MACHINE (Hands Behind the Back)
+        // ARM OCCLUSION MANAGER (Fallback Parking Engine)
         // ============================================================
         class ArmOcclusionManager {
-            constructor(side) {
-                this.side = side; // "Left" or "Right"
-                this.wasTargetingBack = false;
-                this.parkedWristPos = new THREE.Vector3();
+            constructor(sideName) {
+                this.side = sideName;
+                this.isOccluded = false;
+                this.parkedArmQuat = new THREE.Quaternion();
+                this.parkedForeArmQuat = new THREE.Quaternion(); 
+
+                // Establish a natural resting pose hanging by the torso side
+                if (this.side === "Left") {
+                    this.parkedArmQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI * 0.42);
+                } else {
+                    this.parkedArmQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI * 0.42);
+                }
             }
 
-            resolveHandPosition(wristPos, hipPos, visibility) {
-                const threshold = 0.45; // Visibility boundary
-                
-                if (visibility < threshold) {
-                    if (!this.wasTargetingBack) {
-                        this.wasTargetingBack = true;
-                        // Offset the target position locally behind the pelvis (-Z)
-                        const zOffset = -0.22; // Meters behind pelvis
-                        const xOffset = this.side === "Left" ? 0.12 : -0.12;
-                        
-                        this.parkedWristPos.set(
-                            hipPos.x + xOffset,
-                            hipPos.y - 0.15, // Slightly below hips
-                            hipPos.z + zOffset
-                        );
-                    }
-                    return this.parkedWristPos.clone();
+            process(visibility, currentQuat, boneName, enforceParking) {
+                const threshold = 0.45;
+                if (enforceParking && visibility < threshold) {
+                    this.isOccluded = true;
+                    const target = boneName.includes("ForeArm") ? this.parkedForeArmQuat : this.parkedArmQuat;
+                    return currentQuat.clone().slerp(target, 0.15);
                 } else {
-                    this.wasTargetingBack = false;
-                    return wristPos;
+                    if (!boneName.includes("ForeArm")) {
+                        this.isOccluded = false;
+                    }
+                    return currentQuat;
                 }
             }
         }
@@ -483,12 +474,12 @@
         const rightArmManager = new ArmOcclusionManager("Right");
 
         // ============================================================
-        // SKEL‑INSPIRED CONSTRAINTS (Biomechanical Joint Limits & Axes)
+        // COMPILED SKEL CONSTRAINTS
         // ============================================================
         const JOINT_LIMITS = {
-            elbow: { min: -0.05, max: 2.3 }, // Joint flexion (rad)
-            knee:  { min: 0.0, max: 2.35 },  // Anatomically constrained bending range
-            shoulder: { cone: 1.6 },         // Maximum ball-and-socket half-angle cone
+            elbow: { min: -0.05, max: 2.3 }, 
+            knee:  { min: 0.0, max: 2.35 },  
+            shoulder: { cone: 1.6 },         
             hip: { cone: 1.4 },
             spine: { x: 0.5, z: 0.5, y: 0.35 },
             neck: { x: 0.6, z: 0.6, y: 0.45 }
@@ -553,14 +544,12 @@
             return Math.min(Math.max(angle, min), max);
         }
 
-        // Exact Quaternion Biomechanical Constraint Engine
         function applyJointConstraint(quat, boneName, type) {
             const euler = new THREE.Euler().setFromQuaternion(quat, 'XYZ');
             let clamped = false;
             
             if (type === 'elbow' || type === 'knee') {
                 const lim = JOINT_LIMITS[type];
-                // Flexion hinges only rotate on the primary bend axis (Euler X)
                 euler.x = clampAngle(euler.x, lim.min, lim.max);
                 euler.y = 0.0;
                 euler.z = 0.0;
@@ -575,7 +564,7 @@
                     euler.z *= ratio;
                     clamped = true;
                 }
-                euler.y = clampAngle(euler.y, -0.7, 0.7); // Internal/external rotation twist limit
+                euler.y = clampAngle(euler.y, -0.8, 0.8); 
             } else if (type === 'spine' || type === 'neck') {
                 const lim = JOINT_LIMITS[type];
                 euler.x = clampAngle(euler.x, -lim.x, lim.x);
@@ -630,7 +619,6 @@
             rimLight.position.set(-5, 5, -5);
             scene.add(rimLight);
             
-            // Biomechanical Grid layout
             const grid = new THREE.GridHelper(15, 30, 0x14b8a6, 0x1e293b);
             grid.position.y = 0;
             scene.add(grid);
@@ -741,42 +729,6 @@
         }
 
         // ============================================================
-        // TORSO ORIENTATION SOLVER (360-Degree Rotation Tracking)
-        // ============================================================
-        function estimateTorsoRotation(jointCoords, worldLms) {
-            if (!jointCoords.leftShoulder || !jointCoords.rightShoulder || !jointCoords.leftHip) {
-                return 0; // Default facing forward
-            }
-
-            // Define vectors along torso plane
-            const shoulderVec = new THREE.Vector3().subVectors(
-                jointCoords.rightShoulder, 
-                jointCoords.leftShoulder
-            ).normalize();
-            
-            const spineVec = new THREE.Vector3().subVectors(
-                jointCoords.leftHip, 
-                jointCoords.leftShoulder
-            ).normalize();
-
-            // Calculate the cross product normal of the torso
-            const torsoNormal = new THREE.Vector3().crossVectors(shoulderVec, spineVec).normalize();
-            document.getElementById('diag-torso-normal').textContent = torsoNormal.z.toFixed(2);
-
-            // Fetch Nose/Eyes landmark visibility values
-            const nose = worldLms[0];
-            const noseVisible = nose && nose.visibility > 0.5;
-
-            // Z Normal < -0.15 with low facial landmark confidence dictates facing away from camera
-            if (torsoNormal.z < -0.15 && !noseVisible) {
-                return Math.PI; // 180-degree flip
-            } else if (torsoNormal.z > 0.15) {
-                return 0.0;     // Facing front
-            }
-            return null; // Return null to let interpolation hold current state on lateral transitions
-        }
-
-        // ============================================================
         // REALTIME POSE PROCESSOR WITH SMOOTHING & BIOMECHANICS
         // ============================================================
         function onPoseAnalysis(results) {
@@ -784,7 +736,6 @@
             const latency = lastProcessed > 0 ? timestamp - lastProcessed : 0;
             lastProcessed = timestamp;
 
-            // Stats HUD Update
             fpsCounter++;
             if (timestamp - lastFpsUpdate > 1000) {
                 document.getElementById('diag-fps').textContent = fpsCounter;
@@ -793,7 +744,6 @@
                 lastFpsUpdate = timestamp;
             }
 
-            // Alpha-Chroma mapping
             const canvasEl = document.getElementById('pip-canvas');
             if (canvasEl && results.segmentationMask && results.image) {
                 if (canvasEl.width !== results.image.width || canvasEl.height !== results.image.height) {
@@ -815,46 +765,40 @@
             if (!results.poseWorldLandmarks) return;
             const worldLms = results.poseWorldLandmarks;
             const jointCoords = {};
-            const jointVisibilities = {};
             const minVis = 0.45;
 
             const useOneEuro = document.getElementById('toggle-one-euro').checked;
             const useKalman = document.getElementById('toggle-kalman').checked;
             const useFootLocking = document.getElementById('toggle-foot-locking').checked;
             const useSkelConstraints = document.getElementById('toggle-skel-constraints').checked;
+            const useTorsoSpin = document.getElementById('toggle-torso-spin').checked;
+            const useOcclusionParking = document.getElementById('toggle-occlusion-parking').checked;
 
             // Pipeline Step 1: Coordinate Extraction & Filtering
             for (const [name, idx] of Object.entries(jointIndices)) {
                 const lm = worldLms[idx];
-                if (lm) {
-                    // Normalize space coordinates - Mirrored camera translation
+                if (lm && lm.visibility > minVis) {
                     let rawPos = new THREE.Vector3(-lm.x, -lm.y + 1.0, -lm.z);
-                    jointVisibilities[name] = lm.visibility;
 
-                    if (lm.visibility > minVis) {
-                        // Initialize Filters per joint on the fly
-                        if (!jointOneEuroFilters[name]) {
-                            const cutoff = parseFloat(document.getElementById('slider-min-cutoff').value);
-                            const beta = parseFloat(document.getElementById('slider-beta').value);
-                            jointOneEuroFilters[name] = new OneEuroFilter3D(cutoff, beta);
-                            jointKalmanFilters[name] = new KalmanFilter3D();
-                        }
-
-                        // Apply filters conditionally
-                        let filteredPos = rawPos.clone();
-                        if (useOneEuro) {
-                            filteredPos = jointOneEuroFilters[name].filter(filteredPos, timestamp);
-                        }
-                        if (useKalman) {
-                            filteredPos = jointKalmanFilters[name].filter(filteredPos);
-                        }
-
-                        jointCoords[name] = filteredPos;
+                    if (!jointOneEuroFilters[name]) {
+                        const cutoff = parseFloat(document.getElementById('slider-min-cutoff').value);
+                        const beta = parseFloat(document.getElementById('slider-beta').value);
+                        jointOneEuroFilters[name] = new OneEuroFilter3D(cutoff, beta);
+                        jointKalmanFilters[name] = new KalmanFilter3D();
                     }
+
+                    let filteredPos = rawPos.clone();
+                    if (useOneEuro) {
+                        filteredPos = jointOneEuroFilters[name].filter(filteredPos, timestamp);
+                    }
+                    if (useKalman) {
+                        filteredPos = jointKalmanFilters[name].filter(filteredPos);
+                    }
+
+                    jointCoords[name] = filteredPos;
                 }
             }
 
-            // Estimate auxiliary spine landmarks
             if (jointCoords.leftShoulder && jointCoords.rightShoulder) {
                 jointCoords.spineTop = new THREE.Vector3().addVectors(jointCoords.leftShoulder, jointCoords.rightShoulder).multiplyScalar(0.5);
             }
@@ -867,51 +811,19 @@
 
             const dt = latency / 1000.0;
 
-            // Pipeline Step 2: Hips Base & Spin Solver
-            const targetYSpin = estimateTorsoRotation(jointCoords, worldLms);
-            if (resolvedBones.Hips && targetYSpin !== null) {
-                // Slerp the rotation smoothly
-                const currentQuat = resolvedBones.Hips.quaternion.clone();
-                const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetYSpin, 0));
-                resolvedBones.Hips.quaternion.slerp(targetQuat, 0.2);
-            }
-
-            // Pipeline Step 3: Arm Occlusion Solver (Behind Back)
-            if (jointCoords.spineBottom) {
-                if (jointCoords.leftWrist) {
-                    jointCoords.leftWrist = leftArmManager.resolveHandPosition(
-                        jointCoords.leftWrist, 
-                        jointCoords.spineBottom, 
-                        jointVisibilities['leftWrist'] || 0
-                    );
-                }
-                if (jointCoords.rightWrist) {
-                    jointCoords.rightWrist = rightArmManager.resolveHandPosition(
-                        jointCoords.rightWrist, 
-                        jointCoords.spineBottom, 
-                        jointVisibilities['rightWrist'] || 0
-                    );
-                }
-            }
-
-            // Pipeline Step 4: Foot Grounding Engine & Anti-Slide lock
+            // Pipeline Step 2: Foot Grounding Engine
             if (jointCoords.leftAnkle) {
                 const initialLeft = jointCoords.leftAnkle.clone();
                 const processedLeft = footEngineLeft.process(initialLeft, 0.02, dt, useFootLocking);
                 jointCoords.leftAnkle.copy(processedLeft);
-                document.getElementById('diag-foot-l').textContent = footEngineLeft.isLocked ? "LOCKED" : "Free";
-                document.getElementById('diag-foot-l').className = footEngineLeft.isLocked ? "text-teal-400 font-bold" : "text-slate-200";
             }
             if (jointCoords.rightAnkle) {
                 const initialRight = jointCoords.rightAnkle.clone();
                 const processedRight = footEngineRight.process(initialRight, 0.02, dt, useFootLocking);
                 jointCoords.rightAnkle.copy(processedRight);
-                document.getElementById('diag-foot-r').textContent = footEngineRight.isLocked ? "LOCKED" : "Free";
-                document.getElementById('diag-foot-r').className = footEngineRight.isLocked ? "text-teal-400 font-bold" : "text-slate-200";
             }
 
-            // Pipeline Step 5: Leg IK Refinement via FABRIK Solver
-            // Left leg solve (Hip -> Knee -> Ankle)
+            // Pipeline Step 3: Leg IK Refinement via FABRIK Solver
             if (jointCoords.leftHip && jointCoords.leftKnee && jointCoords.leftAnkle) {
                 const points = [jointCoords.leftHip, jointCoords.leftKnee, jointCoords.leftAnkle];
                 const boneLengths = [
@@ -923,7 +835,6 @@
                 jointCoords.leftKnee.copy(solved[1]);
                 jointCoords.leftAnkle.copy(solved[2]);
             }
-            // Right leg solve
             if (jointCoords.rightHip && jointCoords.rightKnee && jointCoords.rightAnkle) {
                 const points = [jointCoords.rightHip, jointCoords.rightKnee, jointCoords.rightAnkle];
                 const boneLengths = [
@@ -936,7 +847,28 @@
                 jointCoords.rightAnkle.copy(solved[2]);
             }
 
-            // Pipeline Step 6: Map kinematic chain rotations with constraints
+            // Pipeline Step 4: 360° Torso Spin Tracking Logic
+            if (resolvedBones.Hips && jointCoords.leftShoulder && jointCoords.rightShoulder) {
+                const shoulderVec = new THREE.Vector3().subVectors(jointCoords.leftShoulder, jointCoords.rightShoulder);
+                shoulderVec.y = 0;
+                shoulderVec.normalize();
+                
+                let angle = Math.atan2(-shoulderVec.z, shoulderVec.x);
+                
+                if (useTorsoSpin) {
+                    const targetRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                    resolvedBones.Hips.quaternion.slerp(targetRotation, 0.15);
+                } else {
+                    resolvedBones.Hips.quaternion.slerp(new THREE.Quaternion(), 0.15);
+                }
+                
+                const isBack = shoulderVec.z > 0.15;
+                const normalLabel = isBack ? "Back" : "Front";
+                document.getElementById('diag-torso').textContent = normalLabel;
+                document.getElementById('diag-torso').className = isBack ? "text-yellow-400 font-bold" : "text-slate-200";
+            }
+
+            // Pipeline Step 5: Map kinematic chain rotations with limits & occlusion parking
             KINEMATIC_CHAIN.forEach(([parentName, childName]) => {
                 const parentBone = resolvedBones[parentName];
                 const childBone = resolvedBones[childName];
@@ -948,7 +880,6 @@
                 const endPos = jointCoords[map.end];
                 if (!startPos || !endPos) return;
                 
-                // Vector orientation mapping
                 const targetDir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
                 const parentQuatInv = new THREE.Quaternion();
                 if (parentBone.parent) {
@@ -958,24 +889,43 @@
                 const localDir = targetDir.clone().applyQuaternion(parentQuatInv);
                 const defaultDir = BONE_AXES[childName] || new THREE.Vector3(0, 1, 0);
                 
-                const quat = new THREE.Quaternion().setFromUnitVectors(defaultDir, localDir);
+                let quat = new THREE.Quaternion().setFromUnitVectors(defaultDir, localDir);
                 
-                // Apply strict SKEL limit envelopes dynamically
                 if (useSkelConstraints) {
-                    const constrainedQuat = applyJointConstraint(quat, childName, map.type);
-                    childBone.quaternion.slerp(constrainedQuat, 0.4);
-                } else {
-                    childBone.quaternion.slerp(quat, 0.4);
+                    quat = applyJointConstraint(quat, childName, map.type);
                 }
+
+                // Smooth Arm Occlusion Parking Process
+                if (childName === 'LeftArm' || childName === 'LeftForeArm') {
+                    const vis = (worldLms[jointIndices.leftElbow]?.visibility || 1.0) * (worldLms[jointIndices.leftWrist]?.visibility || 1.0);
+                    quat = leftArmManager.process(vis, quat, childName, useOcclusionParking);
+                } else if (childName === 'RightArm' || childName === 'RightForeArm') {
+                    const vis = (worldLms[jointIndices.rightElbow]?.visibility || 1.0) * (worldLms[jointIndices.rightWrist]?.visibility || 1.0);
+                    quat = rightArmManager.process(vis, quat, childName, useOcclusionParking);
+                }
+
+                childBone.quaternion.slerp(quat, 0.4);
             });
             
-            // Reconcile world translation offsets via Hips base bone
+            // Reconcile world translation offsets
             if (resolvedBones.Hips && jointCoords.spineBottom) {
                 const target = jointCoords.spineBottom;
                 const scale = (loadedModel && loadedModel.scale.y) ? loadedModel.scale.y : 1.0;
                 resolvedBones.Hips.position.x += (target.x / scale - resolvedBones.Hips.position.x) * 0.15;
                 resolvedBones.Hips.position.y += (target.y / scale - resolvedBones.Hips.position.y) * 0.15;
                 resolvedBones.Hips.position.z += (target.z / scale - resolvedBones.Hips.position.z) * 0.15;
+            }
+
+            // Update state display metrics
+            if (document.getElementById('diag-foot-l')) {
+                const isLOff = leftArmManager.isOccluded;
+                document.getElementById('diag-foot-l').textContent = isLOff ? "Parked" : "Active";
+                document.getElementById('diag-foot-l').className = isLOff ? "text-yellow-400 font-bold" : "text-slate-200";
+            }
+            if (document.getElementById('diag-foot-r')) {
+                const isROff = rightArmManager.isOccluded;
+                document.getElementById('diag-foot-r').textContent = isROff ? "Parked" : "Active";
+                document.getElementById('diag-foot-r').className = isROff ? "text-yellow-400 font-bold" : "text-slate-200";
             }
         }
 
@@ -989,7 +939,6 @@
             document.getElementById('min-cutoff-val').textContent = cutoff.toFixed(2);
             document.getElementById('beta-val').textContent = beta.toFixed(3);
 
-            // Dynamically propagate values directly into existing filters
             Object.values(jointOneEuroFilters).forEach(f => {
                 f.minCutoff = cutoff;
                 f.beta = beta;
@@ -997,7 +946,7 @@
         }
 
         // ============================================================
-        // HIGH FIDELITY MODEL LOADER ENGINE
+        // MODEL LOADER ENGINE
         // ============================================================
         function handleModelFile(event) {
             const file = event.target.files[0];
@@ -1026,13 +975,12 @@
                 loadedModel = model;
                 scene.add(loadedModel);
 
-                // Re-scale target height metrics
                 const box = new THREE.Box3().setFromObject(loadedModel);
                 const size = box.getSize(new THREE.Vector3());
                 const center = box.getCenter(new THREE.Vector3());
                 
                 if (size.y > 0.001) {
-                    const targetHeight = 1.65; // Normal human height in meters
+                    const targetHeight = 1.65; 
                     const scale = targetHeight / size.y;
                     loadedModel.scale.set(scale, scale, scale);
                 }
@@ -1047,7 +995,6 @@
                     loadedModel.position.y -= minY;
                 }
 
-                // Complex humanoid bone mappings heuristic engine
                 const boneMap = {
                     'Hips': ['hips', 'pelvis', 'root', 'hip', 'bip001_pelvis', 'root_joint'],
                     'Spine': ['spine', 'chest', 'spine1', 'spine2', 'torso', 'upper_torso'],
@@ -1071,7 +1018,6 @@
                     }
                 });
 
-                // First pass execution (exact substring heuristics match)
                 const usedBones = new Set();
                 for (const [skelName, aliases] of Object.entries(boneMap)) {
                     for (const bone of allBones) {
@@ -1212,7 +1158,7 @@
         function generateCode() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
 
         // ============================================================
-        // WEB_RTC / PEER INITIALIZATION ENGINE
+        // WEBRTC / PEER INITIALIZATION
         // ============================================================
         function startAsCamera() {
             setupView.classList.add('hidden');
@@ -1300,7 +1246,6 @@
             async function processFrame() {
                 if (!processingLoopActive) return;
                 const now = Date.now();
-                // Frame rate throttled to 30 FPS targeting consistent CPU timing
                 if (now - lastProcessed > 33) {
                     if (video.readyState >= 2) {
                         try { await poseDetector.send({ image: video }); } catch (e) {}
@@ -1311,9 +1256,11 @@
             processFrame();
         }
 
-        // ============================================================
-        // GLOBAL FUNCTIONS EXPOSURE
-        // ============================================================
+        window.onload = () => {
+            console.log("SKEL-Mirror Pro Compiled Edition Ready - Aligned with Compiled Intelligence Engine");
+        };
+
+        // Global functions exposure
         window.startAsDisplay = startAsDisplay;
         window.startAsCamera = startAsCamera;
         window.connectToDisplay = connectToDisplay;
