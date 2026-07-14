@@ -120,12 +120,22 @@
                 </div>
 
                 <div class="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-3">
+                    <!-- Stream Link Code -->
                     <div id="code-prompt" class="space-y-1 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                         <span class="text-[9px] uppercase font-semibold text-slate-500 tracking-wider block">Link Code</span>
                         <div class="flex items-center gap-3">
                             <span id="display-peer-code" class="text-xl font-mono font-bold text-teal-400">Generating...</span>
                             <span class="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">Enter on phone</span>
                         </div>
+                    </div>
+
+                    <!-- Video File Source Uploader -->
+                    <div class="space-y-1 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                        <span class="text-[9px] uppercase font-semibold text-slate-500 tracking-wider block">Or Upload Local MP4 Video</span>
+                        <label class="flex flex-col items-center justify-center w-full h-12 border border-dashed border-slate-800 hover:border-teal-500 bg-slate-900 rounded-lg cursor-pointer transition p-1 text-center">
+                            <span class="text-[10px] text-slate-400 font-medium">📁 Select .mp4/.mov video</span>
+                            <input id="video-upload" type="file" accept="video/mp4,video/quicktime,video/webm" class="hidden" onchange="handleVideoFile(event)">
+                        </label>
                     </div>
                     
                     <!-- Model Uploader -->
@@ -228,7 +238,8 @@
             
             <!-- Video PiP with Chroma Key -->
             <div id="pip-container" class="hidden absolute bottom-4 right-4 w-40 h-28 bg-black rounded-xl overflow-hidden border border-slate-800 shadow-xl z-20">
-                <video id="remote-video" autoplay playsinline muted class="hidden"></video>
+                <!-- Video Element must remain rendered to avoid browser frame suspends -->
+                <video id="remote-video" autoplay playsinline muted style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none;"></video>
                 <canvas id="pip-canvas" class="w-full h-full object-cover"></canvas>
                 <div class="absolute bottom-1 left-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded font-mono">📷 Chroma Feed</div>
             </div>
@@ -245,6 +256,7 @@
         let poseDetector = null;
         let activeCall = null;
         let processingLoopActive = false;
+        let isProcessingFrame = false;
         let lastProcessed = 0;
         let fpsCounter = 0;
         let lastFpsUpdate = 0;
@@ -1076,13 +1088,42 @@
         }
 
         // ============================================================
-        // MODEL LOADER ENGINE
+        // MODEL & VIDEO LOADER ENGINES
         // ============================================================
         function handleModelFile(event) {
             const file = event.target.files[0];
             if (!file) return;
             const url = URL.createObjectURL(file);
             loadCustomModel(url, file.name);
+        }
+
+        function handleVideoFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            setStatus('loading', 'Loading Video...');
+            
+            const video = document.getElementById('remote-video');
+            const url = URL.createObjectURL(file);
+            
+            // Re-bind source to local input stream
+            video.srcObject = null;
+            video.src = url;
+            video.loop = true;
+            video.muted = true;
+            video.playsInline = true;
+            
+            document.getElementById('pip-container').classList.remove('hidden');
+            
+            video.onloadedmetadata = () => {
+                video.play().then(() => {
+                    startFrameProcessing();
+                    setStatus('connected', 'Playing Video');
+                }).catch(err => {
+                    console.error("Video playback failed:", err);
+                    setStatus('offline', 'Play Failed');
+                });
+            };
         }
 
         function loadFromURLInput() {
@@ -1222,6 +1263,15 @@
         // ============================================================
         function resetApp() {
             processingLoopActive = false;
+            isProcessingFrame = false;
+            
+            const video = document.getElementById('remote-video');
+            if (video) {
+                video.pause();
+                video.src = "";
+                video.srcObject = null;
+            }
+            
             if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
             if (activeCall) { activeCall.close(); activeCall = null; }
             if (peer) { peer.destroy(); peer = null; }
@@ -1341,9 +1391,11 @@
                 call.on('stream', (stream) => {
                     const video = document.getElementById('remote-video');
                     document.getElementById('pip-container').classList.remove('hidden');
+                    
+                    video.src = "";
                     video.srcObject = stream;
                     video.onloadedmetadata = () => {
-                        video.play();
+                        video.play().catch(e => console.error("WebRTC play failed:", e));
                         startFrameProcessing();
                         setStatus('connected', 'MoCap Frame Active');
                     };
@@ -1373,13 +1425,19 @@
             if (processingLoopActive) return;
             processingLoopActive = true;
             const video = document.getElementById('remote-video');
+            
             async function processFrame() {
                 if (!processingLoopActive) return;
-                const now = Date.now();
-                if (now - lastProcessed > 33) {
-                    if (video.readyState >= 2) {
-                        try { await poseDetector.send({ image: video }); } catch (e) {}
+                
+                // Only send next frame if previous call has completed to prevent thread blocking/freezing
+                if (video.readyState >= 2 && !video.paused && !video.ended && !isProcessingFrame) {
+                    isProcessingFrame = true;
+                    try { 
+                        await poseDetector.send({ image: video }); 
+                    } catch (e) {
+                        console.error("Inference skip:", e);
                     }
+                    isProcessingFrame = false;
                 }
                 requestAnimationFrame(processFrame);
             }
@@ -1396,6 +1454,7 @@
         window.connectToDisplay = connectToDisplay;
         window.resetApp = resetApp;
         window.handleModelFile = handleModelFile;
+        window.handleVideoFile = handleVideoFile;
         window.loadFromURLInput = loadFromURLInput;
         window.updateZoom = updateZoom;
         window.updateFilters = updateFilters;
