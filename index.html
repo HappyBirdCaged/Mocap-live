@@ -852,10 +852,15 @@
             return map;
         }
 
-        // ========== VIDEO HANDLING ==========
-        function handleVideoFile(event) {
+        // ========== VIDEO HANDLING (FIXED PIPELINE ENGINE STALLS) ==========
+        async function handleVideoFile(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // Failsafe: Ensure computer vision engine has initialized
+            if (!state.pose) {
+                await initMediaPipeWrapper();
+            }
 
             // Disconnect active phone links if loading a local file
             if (activeCall) {
@@ -907,26 +912,39 @@
         // ========== MEDIAPIPE POSE ==========
         async function initMediaPipe() {
             log('🔧 Initializing MediaPipe...');
-            const pose = new Pose({
-                locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
-            });
-            pose.setOptions({
-                modelComplexity: 2,
-                smoothLandmarks: true,
-                enableSegmentation: false,
-                minDetectionConfidence: 0.4,
-                minTrackingConfidence: 0.4,
-            });
-            pose.onResults((results) => {
-                if (results.poseLandmarks) {
-                    state.landmarks = results.poseLandmarks;
-                    state.frameCount++;
-                    applyPoseToRig(results.poseLandmarks);
+            try {
+                // @ts-ignore
+                if (typeof Pose === 'undefined') {
+                    throw new Error('MediaPipe Pose library is not declared or load blocked by CORS/security policies.');
                 }
-            });
-            state.pose = pose;
-            log('✅ MediaPipe ready');
-            return pose;
+                // @ts-ignore
+                const pose = new Pose({
+                    locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
+                });
+                pose.setOptions({
+                    modelComplexity: 1, // Balance performance and accuracy
+                    smoothLandmarks: true,
+                    enableSegmentation: false,
+                    minDetectionConfidence: 0.35,
+                    minTrackingConfidence: 0.35,
+                });
+                pose.onResults((results) => {
+                    if (results.poseLandmarks) {
+                        state.landmarks = results.poseLandmarks;
+                        state.frameCount++;
+                        if (state.frameCount % 30 === 0) {
+                            log(`✨ Tracking active: Detected ${results.poseLandmarks.length} body points`);
+                        }
+                        applyPoseToRig(results.poseLandmarks);
+                    }
+                });
+                state.pose = pose;
+                log('✅ MediaPipe ready');
+                return pose;
+            } catch (err) {
+                log(`❌ MediaPipe Init Error: ${err.message}`);
+                throw err;
+            }
         }
 
         // ========== CAMERA ==========
@@ -945,7 +963,9 @@
                 state.isVideoFile = false;
                 videoFileName.textContent = '📷 Webcam';
 
+                // @ts-ignore
                 if (window.Camera) {
+                    // @ts-ignore
                     const cam = new Camera(video, {
                         onFrame: async () => {
                             if (state.tracking && state.pose && !state.isProcessingFrame) {
@@ -1004,7 +1024,7 @@
             log('⏹️ Camera stopped');
         }
 
-        // ========== PROCESSING LOOP (FIXED CONGESTION GATE) ==========
+        // ========== PROCESSING LOOP ==========
         function startProcessingLoop() {
             if (state.processing) return;
             state.processing = true;
@@ -1193,8 +1213,6 @@
             if (state.oneEuro) {
                 const o = oneEuroStates.get(key);
                 x = o.x.update(x, time);
-                y = o.y.update(y, time);
-                z = o.z.update(z, time);
             }
             return new THREE.Vector3(x, y, z);
         }
@@ -1310,7 +1328,7 @@
             }
 
             const time = performance.now();
-            const confThresh = 0.35;
+            const confThresh = 0.20; // Lowered to tolerate far/shadowed frames
 
             const world = {};
             let validCount = 0;
