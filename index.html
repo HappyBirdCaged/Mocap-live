@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Pro Mocap – VRM (Full Body + Face + Hands)</title>
+  <title>Pro Mocap – Full-Body Precision Edition</title>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,8 +11,8 @@
       --bg: #0a0a0f;
       --panel-bg: #12121a;
       --text: #e0e0e0;
-      --accent: #5b8af7;
-      --accent-hover: #4a78e4;
+      --accent: #00ff88;
+      --accent-hover: #00cc6e;
       --border: #1e1e2e;
       --shadow: 0 4px 24px rgba(0,0,0,0.5);
     }
@@ -89,6 +89,7 @@
     .role-btn.primary {
       background: var(--accent);
       border-color: var(--accent);
+      color: #000;
     }
     .role-btn.primary:hover {
       background: var(--accent-hover);
@@ -231,7 +232,7 @@
 
     .loading-overlay {
       position: fixed;
-      top:0; left:0; width:100%; height:100%;
+      inset: 0;
       background: var(--bg);
       display: flex;
       flex-direction: column;
@@ -251,6 +252,7 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
     .loading-text { font-size:0.9rem; color:#aaa; text-align:center; max-width:360px; }
+    .error-box { color: #ff8888; font-size: 0.8rem; margin-top: 10px; max-width: 380px; }
 
     .controls-bar {
       display: flex;
@@ -282,21 +284,21 @@
       gap: 5px;
     }
     .btn:hover { border-color: var(--accent); background: #1a1a2e; color:#fff; }
-    .btn.active { background: var(--accent); border-color: var(--accent); color:#fff; }
+    .btn.active { background: var(--accent); border-color: var(--accent); color:#000; font-weight: 600; }
     .status-dot {
       display:inline-block; width:8px; height:8px; border-radius:50%;
       margin-right:5px;
     }
-    .status-dot.live { background:#4fda6e; box-shadow:0 0 12px #4fda6e80; animation:pulse 1.5s infinite; }
+    .status-dot.live { background:#00ff88; box-shadow:0 0 12px #00ff8880; animation:pulse 1.5s infinite; }
     .status-dot.idle { background:#f7a54b; box-shadow:0 0 12px #f7a54b80; animation:pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
     .status-text { font-size:0.78rem; color:#aaa; display:inline-flex; align-items:center; gap:4px; }
     .file-name { font-size:0.7rem; color:#888; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .badge { background:#1e1e2e; border-radius:12px; padding:2px 10px; font-size:0.65rem; color:#aaa; border:1px solid #2a2a3a; }
-    .peer-code-badge { background:#112a1d; border:1px solid #1f5236; color:#4fda6e; border-radius:12px; padding:2px 10px; font-size:0.7rem; font-weight:bold; font-family:monospace; }
+    .badge { background:#1e1e2e; border-radius:12px; padding:2px 10px; font-size:0.65rem; color:#00ff88; border:1px solid #2a2a3a; font-family: monospace; }
+    .peer-code-badge { background: #112a1d; border: 1px solid #1f5236; color: #00ff88; border-radius: 12px; padding: 2px 10px; font-size: 0.7rem; font-weight: bold; font-family: monospace; }
     .dashboard-toggle {
       margin-left: auto;
-      font-size:0.7rem;
+      font-size:0.8rem;
       background:transparent;
       border:none;
       color:#888;
@@ -340,51 +342,34 @@
     .dash-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .dash-row input[type="range"] { flex:1; min-width:60px; accent-color:var(--accent); }
     .dash-row input[type="checkbox"] { accent-color:var(--accent); width:16px; height:16px; }
-    .dash-row .val { font-size:0.7rem; color:var(--accent); min-width:30px; text-align:right; }
-
-    #boneInspectorPanel {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      width: 330px;
-      max-height: calc(100vh - 100px);
-      background: var(--panel-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: var(--shadow);
-      z-index: 55;
-      display: flex;
-      flex-direction: column;
-      backdrop-filter: blur(12px);
-      transition: transform 0.3s ease;
-    }
-    #boneInspectorPanel.hidden { display: none !important; }
-
-    @media (max-width: 768px) {
-      .app-container { flex-direction:column; align-items:center; gap:10px; }
-      .video-panel, .threed-panel { max-width:100%; min-width:auto; width:100%; aspect-ratio:4/3; max-height:40vh; }
-      .controls-bar { gap:4px; padding:6px 8px; }
-      .btn { padding:4px 10px; font-size:0.7rem; }
-      #dashboard { width:260px; right:10px; top:10px; padding:12px; }
-      #boneInspectorPanel { width:260px; left:10px; top:10px; padding:12px; }
-    }
+    .dash-row .val { font-size:0.7rem; color:var(--accent); min-width:30px; text-align:right; font-family: monospace; }
   </style>
+
+  <!-- High-Accuracy Tech Stack Dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/holistic.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1/dist/kalidokit.umd.js"></script>
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-<!-- Setup Screen Menu -->
+<!-- Startup Role Selection Screen -->
 <div id="setupView">
   <div class="setup-card">
-    <h2>⚡ Choose Device Role</h2>
-    <p>Select whether this device will display the 3D VRM motion capture avatar or stream motion data from its camera.</p>
+    <h2>⚡ Select Device Role</h2>
+    <p>Choose whether this device will render the 3D VRM Avatar or stream its camera feed as a remote motion sensor.</p>
     <button class="role-btn primary" id="btnRoleDisplay">
-      🖥️ Display Screen (PC / Laptop)
-      <span class="sub">Loads VRM models & handles 3D motion processing</span>
+      🖥️ Display Screen (PC / Mac)
+      <span class="sub">Runs 3D VRM Avatar & Full-Body Vision AI</span>
     </button>
     <button class="role-btn" id="btnRoleCamera">
-      📱 Phone Camera Source
-      <span class="sub">Streams remote camera feed to display PC</span>
+      📱 Phone Camera Streamer
+      <span class="sub">Transmits live wireless camera feed to PC</span>
     </button>
   </div>
 </div>
@@ -394,10 +379,10 @@
   <div class="phone-card">
     <h3 style="color:#fff; font-size:1.1rem;">📱 Mobile Camera Streamer</h3>
     <div id="phoneConnectContainer">
-      <p style="font-size:0.75rem; color:#aaa; margin-bottom:12px;">Enter the 5-character Link Code displayed on your PC screen:</p>
+      <p style="font-size:0.75rem; color:#aaa; margin-bottom:12px;">Enter the 5-character Link Code shown on your PC screen:</p>
       <input type="text" id="targetPeerCode" class="code-input" maxlength="5" placeholder="ABCDE" />
       <button class="role-btn primary" id="btnConnectToDisplay" style="margin-top:16px;">
-        Establish Link & Stream
+        Connect & Stream Camera
       </button>
     </div>
 
@@ -405,9 +390,8 @@
       <div class="phone-video-wrapper">
         <video id="phoneVideoFeed" autoplay playsinline muted></video>
       </div>
-      <p style="font-size:0.7rem; color:#888; margin-top:8px;">Hold device vertically for best tracking.</p>
+      <p style="font-size:0.7rem; color:#888; margin-top:8px;">Camera stream active. Keep device still.</p>
       <div style="display:flex; gap:8px; margin-top:12px;">
-        <button class="btn" id="btnFlipPhoneCam" style="flex:1; justify-content:center;">🔄 Flip Cam</button>
         <button class="btn" id="btnDisconnectPhone" style="flex:1; justify-content:center; background:#3a1818; border-color:#5a2222; color:#ff8888;">Disconnect</button>
       </div>
     </div>
@@ -417,145 +401,104 @@
 <!-- Loading Overlay -->
 <div class="loading-overlay hidden" id="loadingOverlay">
   <div class="spinner"></div>
-  <div class="loading-text" id="loadingText">Initialising…</div>
+  <div class="loading-text" id="loadingText">Initializing Full-Body Pipeline…</div>
+  <div class="error-box" id="errorBox"></div>
 </div>
 
 <!-- Display Mode App UI -->
 <div id="displayView" class="hidden" style="width:100%; display:flex; flex-direction:column; align-items:center;">
   <div class="app-container">
     <div class="panel video-panel" id="videoPanel">
-      <div class="panel-label">📷 Video</div>
+      <div class="panel-label">📷 Video Input</div>
       <div class="video-wrapper">
-        <video id="videoFeed" autoplay playsinline muted loop></video>
+        <video id="videoFeed" playsinline autoplay muted></video>
         <canvas id="overlayCanvas"></canvas>
       </div>
     </div>
 
     <div class="panel threed-panel" id="threeDPanel">
-      <div class="panel-label">👤 VRM</div>
+      <div class="panel-label">👤 VRM Avatar</div>
+      <canvas id="avatarCanvas"></canvas>
     </div>
   </div>
 
   <div class="controls-bar">
     <button class="btn active" id="btnMirror">🪞 Mirror</button>
-    <button class="btn" id="btnResetCam">🔄 Reset</button>
-    <button class="btn active" id="btnToggleSkeleton">🦴 Overlay</button>
-    <button class="btn" id="btnUpload">📁 Video</button>
-    <button class="btn" id="btnLoadVrm">👤 VRM</button>
-    <button class="btn hidden" id="btnCamera">📷 Cam</button>
-    <button class="btn" id="btnPhone">📱 Phone</button>
+    <button class="btn" id="btnResetCam">🔄 Reset Cam</button>
+    <button class="btn active" id="btnToggleSkeleton">🦴 Skeleton</button>
+    <button class="btn" id="btnUpload">📁 Load MP4 Video</button>
+    <button class="btn" id="btnLoadVrm">👤 Load VRM</button>
+    <button class="btn hidden" id="btnCamera">📷 Live Cam</button>
+    <button class="btn" id="btnPhone">📱 Link Phone</button>
 
     <input type="file" id="fileInput" accept="video/*" style="display:none" />
     <input type="file" id="vrmInput" accept=".vrm" style="display:none" />
 
     <span class="status-text">
       <span class="status-dot idle" id="statusDot"></span>
-      <span id="statusText">Waiting…</span>
+      <span id="statusText">Initializing...</span>
       <span class="file-name" id="fileNameDisplay"></span>
     </span>
 
     <span class="peer-code-badge hidden" id="peerCodeBadge">CODE: -----</span>
-    <span class="badge" id="fpsBadge">0 fps</span>
+    <span class="badge" id="trackingStatusBadge">Tracking: Offline</span>
     <button class="dashboard-toggle" id="dashToggle">⚙️</button>
   </div>
 </div>
 
 <div id="dashboard" class="hidden">
   <h3>
-    <span>Controls</span>
+    <span>Tracking & Render Controls</span>
     <button class="close-dash" id="dashClose">✕</button>
   </h3>
   <div class="dash-group">
-    <label>Opacity</label>
+    <label>Lerp Damping (Smoothing)</label>
+    <div class="dash-row">
+      <input type="range" id="smoothSlider" min="0.1" max="0.9" step="0.05" value="0.7" />
+      <span class="val" id="smoothVal">0.70</span>
+    </div>
+  </div>
+  <div class="dash-group">
+    <label>Dead Zone Threshold</label>
+    <div class="dash-row">
+      <input type="range" id="deadZoneSlider" min="0.000" max="0.010" step="0.001" value="0.002" />
+      <span class="val" id="deadZoneVal">0.002</span>
+    </div>
+  </div>
+  <div class="dash-group">
+    <label>Avatar Opacity</label>
     <div class="dash-row">
       <input type="range" id="opacitySlider" min="0.0" max="1.0" step="0.05" value="1.0" />
       <span class="val" id="opacityVal">1.00</span>
     </div>
   </div>
   <div class="dash-group">
-    <label>Wireframe</label>
+    <label>Wireframe Mode</label>
     <div class="dash-row">
       <input type="checkbox" id="wireframeToggle" />
     </div>
   </div>
-  <div class="dash-group">
-    <label>Smoothing (One‑Euro)</label>
-    <div class="dash-row">
-      <input type="range" id="smoothSlider" min="0.05" max="0.95" step="0.05" value="0.75" />
-      <span class="val" id="smoothVal">0.75</span>
-    </div>
-  </div>
-  <div class="dash-group">
-    <label>Auto‑quality</label>
-    <div class="dash-row">
-      <input type="checkbox" id="autoQualityToggle" checked />
-    </div>
-  </div>
-  <div class="dash-group">
-    <label>Enable Face</label>
-    <div class="dash-row">
-      <input type="checkbox" id="enableFace" checked />
-    </div>
-  </div>
-  <div class="dash-group">
-    <label>Enable Hands</label>
-    <div class="dash-row">
-      <input type="checkbox" id="enableHands" checked />
-    </div>
-  </div>
-  <div class="dash-group" style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 12px;">
-    <label style="font-size:0.75rem; color:#fff; margin-bottom:8px;">Diagnostics</label>
-    <div style="display: flex; gap: 8px; font-size: 0.65rem; margin-bottom: 8px;">
-      <button class="btn" id="btnShowBoneInspector" style="padding: 4px 10px; width:100%; justify-content:center;">📋 Bone Inspector</button>
-    </div>
-  </div>
-  <div id="modelInfo" style="font-size:0.65rem;color:#666;border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">
-    <span style="color:#aaa;">VRM:</span> default
+  <div id="modelInfo" style="font-size:0.65rem;color:#888;border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">
+    <span>Model:</span> AliciaSolid (Default)
   </div>
 </div>
 
-<!-- Bone Inspector -->
-<div id="boneInspectorPanel" class="hidden">
-  <h3 style="font-size:0.85rem; font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:8px;">
-    <span>Bone Mapping Inspector</span>
-    <button id="closeBoneInspector" style="background:transparent; border:none; color:#888; font-size:1.2rem; cursor:pointer;">✕</button>
-  </h3>
-  <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px; max-height: 50vh;">
-    <div>
-      <h4 style="font-size: 0.7rem; color: var(--accent); margin-bottom: 4px; text-transform: uppercase;">Tracking vs. Model Rig</h4>
-      <div id="boneCompareList" style="display:flex; flex-direction:column; gap:4px; font-family: monospace; font-size:0.65rem;"></div>
-    </div>
-    <div style="border-top: 1px solid var(--border); padding-top: 8px;">
-      <h4 style="font-size: 0.7rem; color: #aaa; margin-bottom: 4px; text-transform: uppercase;">All Declared Bones</h4>
-      <div id="modelBoneList" style="display:flex; flex-direction:column; gap:4px; font-family: monospace; font-size:0.65rem; max-height:150px; overflow-y:auto; background: #00000040; padding: 6px; border-radius: 6px;"></div>
-    </div>
-  </div>
-</div>
+<script>
+  // ---- Config & Mocap Parameters ----
+  const CONFIG = {
+    vrmUrl: "https://cdn.jsdelivr.net/gh/pixiv/three-vrm@0.6.11/packages/three-vrm/examples/models/AliciaSolid.vrm",
+    camera: { width: 640, height: 480, facingMode: "user" },
+    tracking: { smoothAmount: 0.1, deadZone: 0.002, defaultLerpAmount: 0.7 },
+    holistic: {
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
+      refineFaceLandmarks: true
+    }
+  };
 
-<!-- ====== SCRIPTS ====== -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/holistic.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
-<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-
-<!-- ES Module Import Map -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.152.0/examples/jsm/",
-    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
-  }
-}
-</script>
-
-<script type="module">
-  // ---- Imports ----
-  import * as THREE from 'three';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-  import { VRM, VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
-
-  // ---- DOM refs ----
+  // ---- DOM Elements ----
   const setupView = document.getElementById('setupView');
   const phoneView = document.getElementById('phoneView');
   const displayView = document.getElementById('displayView');
@@ -566,13 +509,14 @@
   const videoEl = document.getElementById('videoFeed');
   const overlayCanvas = document.getElementById('overlayCanvas');
   const overlayCtx = overlayCanvas.getContext('2d');
-  const threeDContainer = document.getElementById('threeDPanel');
+  const avatarCanvas = document.getElementById('avatarCanvas');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const loadingText = document.getElementById('loadingText');
+  const errorBox = document.getElementById('errorBox');
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
   const fileNameDisplay = document.getElementById('fileNameDisplay');
-  const fpsBadge = document.getElementById('fpsBadge');
+  const trackingStatusBadge = document.getElementById('trackingStatusBadge');
   const peerCodeBadge = document.getElementById('peerCodeBadge');
 
   const btnMirror = document.getElementById('btnMirror');
@@ -589,510 +533,467 @@
   const dashClose = document.getElementById('dashClose');
   const dashboard = document.getElementById('dashboard');
 
-  const boneInspectorPanel = document.getElementById('boneInspectorPanel');
-  const btnShowBoneInspector = document.getElementById('btnShowBoneInspector');
-  const closeBoneInspector = document.getElementById('closeBoneInspector');
-
-  // Phone Mode DOM
   const targetPeerCodeInput = document.getElementById('targetPeerCode');
   const btnConnectToDisplay = document.getElementById('btnConnectToDisplay');
   const phoneConnectContainer = document.getElementById('phoneConnectContainer');
   const phoneActiveContainer = document.getElementById('phoneActiveContainer');
   const phoneVideoFeed = document.getElementById('phoneVideoFeed');
-  const btnFlipPhoneCam = document.getElementById('btnFlipPhoneCam');
   const btnDisconnectPhone = document.getElementById('btnDisconnectPhone');
 
-  // ---- State ----
+  // ---- Application State ----
   let mirrorVideo = true;
   let showSkeleton = true;
-  let poseDetected = false;
-  let latestPoseLandmarks = null;
-  let latestWorldLandmarks = null;
-  let latestFaceLandmarks = null;
-  let latestLeftHand = null;
-  let latestRightHand = null;
   let useCamera = true;
+  let isVideoFilePlaying = false;
   let currentObjectURL = null;
-  let cameraStream = null;
-  let phoneStream = null;
-  let phoneFacingMode = 'user';
-  let frameCount = 0, fpsTime = 0, currentFps = 0;
-  let autoQualityEnabled = true;
-  let smoothingVal = 0.75;
-  let enableFace = true;
-  let enableHands = true;
+  let cameraUtilsInstance = null;
+  let holisticInstance = null;
+  let currentVrm = null;
+  let currentVrmScene = null;
+  let avatarRig = null;
   let appInitialized = false;
 
-  // ---- PeerJS state ----
   let peer = null;
   let activeCall = null;
   let myPeerCode = null;
 
-  // ---- Performance throttling ----
-  let lastProcessed = 0;
-  const PROCESS_INTERVAL = 40; // ms (~25 fps)
+  // ---- Deadzone & Helpers ----
+  function applyDeadZone(val, deadZone = CONFIG.tracking.deadZone) {
+    return Math.abs(val) < deadZone ? 0 : val;
+  }
 
-  // ---- Pre-cached bone nodes ----
-  const boneCache = {};
-  let isDraggingJoint = false;
-  let selectedJointSphere = null;
-  let dragStartMouse = new THREE.Vector2();
-  let dragStartQuat = new THREE.Quaternion();
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  const jointHandlesGroup = new THREE.Group();
+  function getValueOrDefault(smoothVal, val) {
+    return val || smoothVal;
+  }
 
-  // ---- One-Euro Filter ----
-  class OneEuroFilter {
-    constructor(minCutoff = 1.0, beta = 0.007, dCutoff = 1.0) {
-      this.minCutoff = minCutoff;
-      this.beta = beta;
-      this.dCutoff = dCutoff;
-      this.xPrev = 0;
-      this.dxPrev = 0;
-      this.tPrev = 0;
-      this.first = true;
+  // ---- Full-Body Avatar Rigging Class ----
+  class AvatarRig {
+    constructor() {
+      this.vrm = null;
+      this.oldLookTarget = new THREE.Euler();
+      this.hipsRestPosition = null;
     }
-    alpha(cutoff, dt) {
-      const tau = 1.0 / (2 * Math.PI * cutoff);
-      return 1.0 / (1.0 + tau / dt);
+
+    setVRM(vrm) {
+      this.vrm = vrm;
+      this.hipsRestPosition = null; // Reset captured hips rest position for new model
     }
-    update(x, t) {
-      if (this.first) {
-        this.first = false;
-        this.xPrev = x;
-        this.dxPrev = 0;
-        this.tPrev = t;
-        return x;
+
+    rigRotation(boneName, rotation = { x: 0, y: 0, z: 0 }, multiplier = 1, lerpAmount = CONFIG.tracking.defaultLerpAmount) {
+      if (!this.vrm || !rotation) return;
+      const boneNodeName = THREE_VRM.VRMSchema.HumanoidBoneName[boneName];
+      if (!boneNodeName) return;
+      const bone = this.vrm.humanoid.getBoneNode(boneNodeName);
+      if (!bone) return;
+
+      const x = applyDeadZone(rotation.x);
+      const y = applyDeadZone(rotation.y);
+      const z = applyDeadZone(rotation.z);
+
+      const euler = new THREE.Euler(x * multiplier, y * multiplier, z * multiplier, rotation.rotationOrder || "XYZ");
+      const targetQuat = new THREE.Quaternion().setFromEuler(euler);
+      bone.quaternion.slerp(targetQuat, lerpAmount);
+    }
+
+    rigFace(faceResult) {
+      if (!this.vrm || !faceResult) return;
+      this.rigRotation("Neck", faceResult.head, 0.7);
+
+      const blendShapeProxy = this.vrm.blendShapeProxy;
+      const PresetName = THREE_VRM.VRMSchema.BlendShapePresetName;
+
+      if (blendShapeProxy) {
+        const blinkL = 1 - faceResult.eye.l;
+        const blinkR = 1 - faceResult.eye.r;
+        blendShapeProxy.setValue(PresetName.BlinkL, blinkL);
+        blendShapeProxy.setValue(PresetName.BlinkR, blinkR);
+
+        const lerpFn = Kalidokit.Vector.lerp;
+        const alpha = 0.5;
+
+        blendShapeProxy.setValue(PresetName.A, lerpFn(blendShapeProxy.getValue(PresetName.A), faceResult.mouth.shape.A, alpha));
+        blendShapeProxy.setValue(PresetName.I, lerpFn(blendShapeProxy.getValue(PresetName.I), faceResult.mouth.shape.I, alpha));
+        blendShapeProxy.setValue(PresetName.U, lerpFn(blendShapeProxy.getValue(PresetName.U), faceResult.mouth.shape.U, alpha));
+        blendShapeProxy.setValue(PresetName.E, lerpFn(blendShapeProxy.getValue(PresetName.E), faceResult.mouth.shape.E, alpha));
+        blendShapeProxy.setValue(PresetName.O, lerpFn(blendShapeProxy.getValue(PresetName.O), faceResult.mouth.shape.O, alpha));
+
+        const joy = 0.7 * faceResult.mouth.shape.I;
+        blendShapeProxy.setValue(PresetName.Joy, lerpFn(blendShapeProxy.getValue(PresetName.Joy) || 0, joy, alpha));
+        try {
+          blendShapeProxy.setValue(PresetName.Fun, lerpFn(blendShapeProxy.getValue(PresetName.Fun) || 0, joy, alpha));
+        } catch (e) {}
       }
-      const dt = t - this.tPrev;
-      if (dt <= 0) return this.xPrev;
-      const dx = (x - this.xPrev) / dt;
-      const aD = this.alpha(this.dCutoff, dt);
-      const dxHat = aD * dx + (1 - aD) * this.dxPrev;
-      const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
-      const a = this.alpha(cutoff, dt);
-      const xHat = a * x + (1 - a) * this.xPrev;
-      this.xPrev = xHat;
-      this.dxPrev = dxHat;
-      this.tPrev = t;
-      return xHat;
+
+      if (this.vrm.lookAt) {
+        const lerpFn = Kalidokit.Vector.lerp;
+        const lookTarget = new THREE.Euler(
+          lerpFn(this.oldLookTarget.x, faceResult.pupil.y, 0.4),
+          lerpFn(this.oldLookTarget.y, faceResult.pupil.x, 0.4),
+          0,
+          "XYZ"
+        );
+        this.oldLookTarget.copy(lookTarget);
+        this.vrm.lookAt.applyer.lookAt(lookTarget);
+      }
+    }
+
+    rigPose(poseResult) {
+      if (!this.vrm || !poseResult) return;
+
+      // 1. Root / Hips Motion (Crouching, Turning, Root Displacement)
+      if (poseResult.Hips) {
+        if (poseResult.Hips.rotation) {
+          this.rigRotation("Hips", poseResult.Hips.rotation, 0.7, 0.7);
+        }
+        if (poseResult.Hips.position) {
+          const hipsBone = this.vrm.humanoid.getBoneNode(THREE_VRM.VRMSchema.HumanoidBoneName.Hips);
+          if (hipsBone) {
+            if (!this.hipsRestPosition) {
+              this.hipsRestPosition = hipsBone.position.clone();
+            }
+            const posX = this.hipsRestPosition.x + applyDeadZone(poseResult.Hips.position.x) * 0.5;
+            const posY = this.hipsRestPosition.y + applyDeadZone(poseResult.Hips.position.y) * 0.5;
+            const posZ = this.hipsRestPosition.z + applyDeadZone(poseResult.Hips.position.z) * 0.5;
+            hipsBone.position.lerp(new THREE.Vector3(posX, posY, posZ), 0.3);
+          }
+        }
+      }
+
+      // 2. Torso / Spine & Chest
+      this.rigRotation("Chest", poseResult.Spine, 0.25, 0.6);
+      this.rigRotation("Spine", poseResult.Spine, 0.35, 0.6);
+
+      // 3. Shoulders / Clavicles
+      if (poseResult.RightShoulder) this.rigRotation("RightShoulder", poseResult.RightShoulder, 0.5, 0.6);
+      if (poseResult.LeftShoulder) this.rigRotation("LeftShoulder", poseResult.LeftShoulder, 0.5, 0.6);
+
+      // 4. Arms & Elbows
+      this.rigRotation("RightUpperArm", poseResult.RightUpperArm, 1, 0.8);
+      this.rigRotation("RightLowerArm", poseResult.RightLowerArm, 1, 0.8);
+      this.rigRotation("LeftUpperArm", poseResult.LeftUpperArm, 1, 0.8);
+      this.rigRotation("LeftLowerArm", poseResult.LeftLowerArm, 1, 0.8);
+
+      // 5. Legs & Knees (Lower Body Motion)
+      this.rigRotation("RightUpperLeg", poseResult.RightUpperLeg, 1, 0.8);
+      this.rigRotation("RightLowerLeg", poseResult.RightLowerLeg, 1, 0.8);
+      this.rigRotation("LeftUpperLeg", poseResult.LeftUpperLeg, 1, 0.8);
+      this.rigRotation("LeftLowerLeg", poseResult.LeftLowerLeg, 1, 0.8);
+
+      // 6. Feet / Ankles
+      if (poseResult.RightFoot) this.rigRotation("RightFoot", poseResult.RightFoot, 1, 0.8);
+      if (poseResult.LeftFoot) this.rigRotation("LeftFoot", poseResult.LeftFoot, 1, 0.8);
+    }
+
+    rigHand(side, handResult, poseResult) {
+      if (!this.vrm || !handResult) return;
+      const sidePrefix = side === "left" ? "Left" : "Right";
+
+      this.rigRotation(`${sidePrefix}Hand`, {
+        z: poseResult?.[`${sidePrefix}Hand`]?.z || 0,
+        y: handResult[`${sidePrefix}Wrist`]?.y || 0,
+        x: handResult[`${sidePrefix}Wrist`]?.x || 0
+      }, 1, 0.8);
+
+      const joints = ["Proximal", "Intermediate", "Distal"];
+      const fingers = ["Ring", "Index", "Middle", "Thumb", "Little"];
+
+      fingers.forEach(finger => {
+        joints.forEach(joint => {
+          const jointName = `${sidePrefix}${finger}${joint}`;
+          if (handResult[jointName]) {
+            this.rigRotation(jointName, handResult[jointName], 1, 0.8);
+          }
+        });
+      });
+    }
+
+    update(delta) {
+      if (this.vrm) this.vrm.update(delta);
     }
   }
 
-  const filterMap = new Map();
-  function getFilter(boneName, component) {
-    const key = boneName + ':' + component;
-    if (!filterMap.has(key)) {
-      const cutoff = 0.5 + (1 - smoothingVal) * 7.5;
-      filterMap.set(key, new OneEuroFilter(cutoff, 0.007, 1.0));
-    }
-    return filterMap.get(key);
-  }
-
-  // ---- Joint constraints ----
-  const JOINT_CONSTRAINTS = {
-    leftUpperArm: { minX: -3.14, maxX: 3.14, minY: -3.14, maxY: 3.14, minZ: -3.14, maxZ: 3.14 },
-    rightUpperArm: { minX: -3.14, maxX: 3.14, minY: -3.14, maxY: 3.14, minZ: -3.14, maxZ: 3.14 },
-    leftLowerArm: { minX: -2.8, maxX: 2.8, minY: -2.8, maxY: 2.8, minZ: -2.8, maxZ: 2.8 },
-    rightLowerArm: { minX: -2.8, maxX: 2.8, minY: -2.8, maxY: 2.8, minZ: -2.8, maxZ: 2.8 },
-    leftUpperLeg: { minX: -2.4, maxX: 2.4, minY: -1.5, maxY: 1.5, minZ: -1.5, maxZ: 1.5 },
-    rightUpperLeg: { minX: -2.4, maxX: 2.4, minY: -1.5, maxY: 1.5, minZ: -1.5, maxZ: 1.5 },
-    leftLowerLeg: { minX: -2.8, maxX: 2.8, minY: -2.8, maxY: 2.8, minZ: -2.8, maxZ: 2.8 },
-    rightLowerLeg: { minX: -2.8, maxX: 2.8, minY: -2.8, maxY: 2.8, minZ: -2.8, maxZ: 2.8 },
-    spine: { minX: -1.0, maxX: 1.0, minY: -1.0, maxY: 1.0, minZ: -1.0, maxZ: 1.0 },
-    chest: { minX: -0.8, maxX: 0.8, minY: -0.8, maxY: 0.8, minZ: -0.8, maxZ: 0.8 },
-    upperChest: { minX: -0.6, maxX: 0.6, minY: -0.6, maxY: 0.6, minZ: -0.6, maxZ: 0.6 },
-    neck: { minX: -1.2, maxX: 1.2, minY: -1.2, maxY: 1.2, minZ: -1.2, maxZ: 1.2 },
-    leftShoulder: { minX: -0.8, maxX: 0.8, minY: -0.8, maxY: 0.8, minZ: -0.8, maxZ: 0.8 },
-    rightShoulder: { minX: -0.8, maxX: 0.8, minY: -0.8, maxY: 0.8, minZ: -0.8, maxZ: 0.8 },
-  };
-  function clampEuler(euler, constraints) {
-    if (!constraints) return;
-    euler.x = Math.max(constraints.minX, Math.min(constraints.maxX, euler.x));
-    euler.y = Math.max(constraints.minY, Math.min(constraints.maxY, euler.y));
-    euler.z = Math.max(constraints.minZ, Math.min(constraints.maxZ, euler.z));
-  }
-
-  // ---- 3D scene ----
+  // ---- Three.js Engine Setup ----
   let scene, camera, renderer, controls;
-  let currentVrm = null;
-  let currentVrmScene = null;
-  let lookAtTarget = null;
   const clock = new THREE.Clock();
 
   function initThreeJS() {
-    const container = threeDContainer;
-    const rect = container.getBoundingClientRect();
-    const w = rect.width || 600;
-    const h = rect.height || 450;
+    const width = avatarCanvas.clientWidth || 600;
+    const height = avatarCanvas.clientHeight || 450;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color('#12121a');
+    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
+    camera.position.set(0, 1.2, 3.2);
 
-    camera = new THREE.PerspectiveCamera(36, w/h, 0.1, 20);
-    camera.position.set(0, 0.3, 1.8);
-
-    lookAtTarget = new THREE.Object3D();
-    camera.add(lookAtTarget);
-    lookAtTarget.position.set(0, 0, -2);
-    scene.add(camera);
-
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(w, h);
+    renderer = new THREE.WebGLRenderer({ canvas: avatarCanvas, antialias: true, alpha: true });
+    renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    container.appendChild(renderer.domElement);
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0.0, 0);
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.06;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 1.0, 0);
+    controls.minDistance = 0.5;
+    controls.maxDistance = 100;
     controls.update();
 
-    const ambient = new THREE.AmbientLight('#8899cc', 1.4);
-    scene.add(ambient);
-    const key = new THREE.DirectionalLight('#ffffff', 2.2);
-    key.position.set(2, 3, 3);
-    key.castShadow = true;
-    scene.add(key);
-    const fill = new THREE.DirectionalLight('#ff9988', 0.6);
-    fill.position.set(-2, 1.5, 2);
-    scene.add(fill);
-    const rim = new THREE.DirectionalLight('#88ccff', 0.5);
-    rim.position.set(0, 0.5, -3);
-    scene.add(rim);
+    // Lighting
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(2, 4, 2);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
 
-    const grid = new THREE.PolarGridHelper(2.8, 32, 20, 48, '#2a2a3a', '#1a1a28');
-    grid.position.y = -1.05;
+    const frontLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    frontLight.position.set(0, 2, 4);
+    scene.add(frontLight);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const grid = new THREE.GridHelper(20, 40, 0x888888, 0x444444);
+    grid.position.y = 0;
     scene.add(grid);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(12,12), new THREE.ShadowMaterial({ opacity: 0.2 }));
-    ground.rotation.x = -Math.PI/2;
-    ground.position.y = -1.06;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    renderer.domElement.addEventListener('mousedown', onMouseDown, false);
-    renderer.domElement.addEventListener('mousemove', onMouseMove, false);
-    window.addEventListener('mouseup', onMouseUp, false);
-
-    scene.add(jointHandlesGroup);
 
     window.addEventListener('resize', onResize);
   }
 
   function onResize() {
-    const container = threeDContainer;
-    const rect = container.getBoundingClientRect();
-    const w = rect.width, h = rect.height;
-    if (w>0 && h>0) {
-      renderer.setSize(w, h);
-      camera.aspect = w/h;
+    const width = avatarCanvas.clientWidth;
+    const height = avatarCanvas.clientHeight;
+    if (width > 0 && height > 0) {
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
     }
     resizeOverlayCanvas();
-    drawSkeleton();
   }
 
-  // ---- VRM loader ----
+  function resizeOverlayCanvas() {
+    const rect = videoEl.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    overlayCanvas.width = Math.round(rect.width * dpr);
+    overlayCanvas.height = Math.round(rect.height * dpr);
+  }
+
+  // ---- VRM Model Loader ----
   function loadVRM(urlOrBuffer) {
-    statusText.textContent = 'Loading VRM…';
-    const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
+    loadingText.textContent = "Loading Avatar Model...";
+    const loader = new THREE.GLTFLoader();
+    loader.crossOrigin = "anonymous";
 
-    const onLoad = (gltf) => {
-      const vrm = gltf.userData.vrm;
-      if (!vrm) {
-        console.error('[VRM] No VRM data found');
-        statusText.textContent = 'VRM parse error';
-        return;
-      }
-      if (currentVrm) {
-        scene.remove(currentVrmScene);
-      }
+    const parseAndAdd = (gltf) => {
+      THREE_VRM.VRM.from(gltf).then(vrm => {
+        if (currentVrmScene) scene.remove(currentVrmScene);
+        currentVrm = vrm;
+        currentVrmScene = vrm.scene;
 
-      try {
-        VRMUtils.removeUnnecessaryVertices(gltf.scene);
-        VRMUtils.combineSkeletons(gltf.scene);
-        VRMUtils.combineMorphs(vrm);
-      } catch(e) {
-        console.warn('[VRMUtils] Optimization warning:', e);
-      }
+        scene.add(vrm.scene);
+        vrm.scene.rotation.y = Math.PI;
+        vrm.scene.position.set(0, 0, 0);
+        vrm.scene.scale.set(1.2, 1.2, 1.2);
 
-      vrm.scene.traverse((obj) => {
-        obj.frustumCulled = false;
+        vrm.scene.traverse(obj => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+
+        avatarRig.setVRM(vrm);
+        loadingOverlay.classList.add("hidden");
+        statusText.textContent = "VRM Model Loaded";
+      }).catch(err => {
+        console.error("VRM Parse Error:", err);
+        alert("Failed to parse VRM model.");
       });
-
-      if (vrm.lookAt && lookAtTarget) {
-        vrm.lookAt.target = lookAtTarget;
-      }
-
-      currentVrm = vrm;
-      currentVrmScene = vrm.scene;
-      scene.add(vrm.scene);
-      vrm.scene.rotation.y = Math.PI;
-      vrm.scene.position.set(0, -1.05, 0);
-      statusText.textContent = 'VRM Ready';
-      document.getElementById('modelInfo').innerHTML = '<span style="color:#aaa;">VRM:</span> model loaded';
-      console.log('[VRM] loaded & optimized');
-
-      cacheBoneNodes(vrm);
-      debugBones();
-      createJointHandles();
-      populateBoneInspector();
     };
 
     if (urlOrBuffer instanceof ArrayBuffer) {
-      loader.parse(urlOrBuffer, '', onLoad, (err) => {
-        console.error('[VRM] parse error:', err);
-        statusText.textContent = 'VRM parse error';
-      });
+      loader.parse(urlOrBuffer, "", parseAndAdd, err => console.error(err));
     } else {
-      loader.load(urlOrBuffer, onLoad, (progress) => {
-        const pct = Math.round(100 * (progress.loaded / (progress.total || 1)));
-        statusText.textContent = `VRM ${pct}%`;
-      }, (err) => {
-        console.error('[VRM] load error:', err);
-        statusText.textContent = 'VRM load failed';
+      loader.load(urlOrBuffer, parseAndAdd, p => {
+        if (p.total > 0) {
+          const pct = Math.round((p.loaded / p.total) * 100);
+          loadingText.textContent = `Loading Avatar... ${pct}%`;
+        }
+      }, err => console.error(err));
+    }
+  }
+
+  // ---- Tracking & Kalidokit Pipeline ----
+  let smoothedValues = { face: null, pose: null, leftHand: null, rightHand: null };
+
+  function processHolisticResults(results) {
+    const trackingFlags = [];
+    const faceLandmarks = results.faceLandmarks;
+    const worldLandmarks = results.ea || results.poseWorldLandmarks;
+    const poseLandmarks = results.poseLandmarks;
+    const rightHandLandmarks = results.rightHandLandmarks;
+    const leftHandLandmarks = results.leftHandLandmarks;
+
+    // 1. Solve Face
+    if (faceLandmarks) {
+      trackingFlags.push("Face ✓");
+      const faceResult = Kalidokit.Face.solve(faceLandmarks, {
+        runtime: "mediapipe",
+        video: videoEl,
+        smoothBlink: false,
+        blinkSettings: [0.25, 0.75]
       });
-    }
-  }
-
-  // ---- Bone Caching ----
-  const BONE_MAPPING = {
-    'hips': 'hips',
-    'spine': 'spine',
-    'chest': 'chest',
-    'upperChest': 'upperChest',
-    'neck': 'neck',
-    'leftShoulder': 'leftShoulder',
-    'rightShoulder': 'rightShoulder',
-    'leftUpperArm': 'leftUpperArm',
-    'leftLowerArm': 'leftLowerArm',
-    'leftHand': 'leftHand',
-    'rightUpperArm': 'rightUpperArm',
-    'rightLowerArm': 'rightLowerArm',
-    'rightHand': 'rightHand',
-    'leftUpperLeg': 'leftUpperLeg',
-    'leftLowerLeg': 'leftLowerLeg',
-    'leftFoot': 'leftFoot',
-    'rightUpperLeg': 'rightUpperLeg',
-    'rightLowerLeg': 'rightLowerLeg',
-    'rightFoot': 'rightFoot',
-  };
-  const FINGER_MAPPING = {
-    'leftThumbProximal': 'leftThumbProximal',
-    'leftThumbIntermediate': 'leftThumbIntermediate',
-    'leftThumbDistal': 'leftThumbDistal',
-    'leftIndexProximal': 'leftIndexProximal',
-    'leftIndexIntermediate': 'leftIndexIntermediate',
-    'leftIndexDistal': 'leftIndexDistal',
-    'leftMiddleProximal': 'leftMiddleProximal',
-    'leftMiddleIntermediate': 'leftMiddleIntermediate',
-    'leftMiddleDistal': 'leftMiddleDistal',
-    'leftRingProximal': 'leftRingProximal',
-    'leftRingIntermediate': 'leftRingIntermediate',
-    'leftRingDistal': 'leftRingDistal',
-    'leftLittleProximal': 'leftLittleProximal',
-    'leftLittleIntermediate': 'leftLittleIntermediate',
-    'leftLittleDistal': 'leftLittleDistal',
-    'rightThumbProximal': 'rightThumbProximal',
-    'rightThumbIntermediate': 'rightThumbIntermediate',
-    'rightThumbDistal': 'rightThumbDistal',
-    'rightIndexProximal': 'rightIndexProximal',
-    'rightIndexIntermediate': 'rightIndexIntermediate',
-    'rightIndexDistal': 'rightIndexDistal',
-    'rightMiddleProximal': 'rightMiddleProximal',
-    'rightMiddleIntermediate': 'rightMiddleIntermediate',
-    'rightMiddleDistal': 'rightMiddleDistal',
-    'rightRingProximal': 'rightRingProximal',
-    'rightRingIntermediate': 'rightRingIntermediate',
-    'rightRingDistal': 'rightRingDistal',
-    'rightLittleProximal': 'rightLittleProximal',
-    'rightLittleIntermediate': 'rightLittleIntermediate',
-    'rightLittleDistal': 'rightLittleDistal',
-  };
-
-  function cacheBoneNodes(vrm) {
-    const humanoid = vrm.humanoid;
-    if (!humanoid) return;
-    for (const key of Object.keys(boneCache)) delete boneCache[key];
-    for (const [localName, vrmName] of Object.entries(BONE_MAPPING)) {
-      const node = humanoid.getNormalizedBoneNode(vrmName);
-      if (node) boneCache[localName] = node;
-      else {
-        const alt = humanoid.getNormalizedBoneNode(localName);
-        if (alt) boneCache[localName] = alt;
-        else boneCache[localName] = null;
+      if (faceResult) {
+        const eye = { l: faceResult.eye.l, r: faceResult.eye.r };
+        smoothedValues.face = smoothedValues.face ? {
+          head: getValueOrDefault(smoothedValues.face.head, faceResult.head),
+          eye: eye,
+          mouth: faceResult.mouth,
+          pupil: faceResult.pupil,
+          brow: faceResult.brow
+        } : faceResult;
+        avatarRig.rigFace(smoothedValues.face);
       }
     }
-    for (const [localName, vrmName] of Object.entries(FINGER_MAPPING)) {
-      const node = humanoid.getNormalizedBoneNode(vrmName);
-      if (node) boneCache[localName] = node;
-      else boneCache[localName] = null;
-    }
-  }
 
-  function debugBones() {
-    if (!currentVrm?.humanoid) return;
-    console.log("Available humanoid bones:");
-    Object.keys(currentVrm.humanoid.humanBones || {}).forEach(k => {
-      const node = currentVrm.humanoid.getNormalizedBoneNode(k);
-      console.log(k, "→", node ? "FOUND" : "null");
-    });
-  }
-
-  function createJointHandles() {
-    while (jointHandlesGroup.children.length > 0) {
-      const child = jointHandlesGroup.children[0];
-      child.geometry.dispose();
-      child.material.dispose();
-      jointHandlesGroup.remove(child);
-    }
-    if (!currentVrm || !currentVrm.humanoid) return;
-    const keys = Object.keys(currentVrm.humanoid.humanBones || {});
-    keys.forEach(boneName => {
-      const node = currentVrm.humanoid.getNormalizedBoneNode(boneName);
-      if (!node) return;
-      const geom = new THREE.SphereGeometry(0.015, 16, 16);
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0x5b8af7,
-        transparent: true,
-        opacity: 0.6,
-        depthWrite: false,
-        depthTest: false
+    // 2. Solve Full Body Pose (with enableLegs: true)
+    if (poseLandmarks && worldLandmarks) {
+      trackingFlags.push("FullBody ✓");
+      const poseResult = Kalidokit.Pose.solve(worldLandmarks, poseLandmarks, {
+        runtime: "mediapipe",
+        video: videoEl,
+        enableLegs: true
       });
-      const sphere = new THREE.Mesh(geom, mat);
-      sphere.renderOrder = 999;
-      sphere.userData = { boneNode: node, boneName: boneName };
-      jointHandlesGroup.add(sphere);
-    });
-  }
-
-  function updateJointHandles() {
-    const tempV = new THREE.Vector3();
-    jointHandlesGroup.children.forEach(sphere => {
-      const node = sphere.userData.boneNode;
-      if (node) {
-        node.getWorldPosition(tempV);
-        sphere.position.copy(tempV);
+      if (poseResult) {
+        smoothedValues.pose = poseResult;
+        avatarRig.rigPose(poseResult);
       }
-    });
-  }
+    }
 
-  function populateBoneInspector() {
-    const compareContainer = document.getElementById('boneCompareList');
-    const modelContainer = document.getElementById('modelBoneList');
-    if (!compareContainer || !modelContainer) return;
-    compareContainer.innerHTML = '';
-    modelContainer.innerHTML = '';
-    const internalConvention = {
-      'hips': 'Hips (Root)',
-      'spine': 'Spine (Lower torso)',
-      'chest': 'Chest (Upper torso)',
-      'leftShoulder': 'Left Shoulder',
-      'rightShoulder': 'Right Shoulder',
-      'leftUpperArm': 'Left Upper Arm',
-      'leftLowerArm': 'Left Lower Arm',
-      'leftHand': 'Left Hand',
-      'rightUpperArm': 'Right Upper Arm',
-      'rightLowerArm': 'Right Lower Arm',
-      'rightHand': 'Right Hand',
-      'leftUpperLeg': 'Left Upper Leg',
-      'leftLowerLeg': 'Left Lower Leg',
-      'leftFoot': 'Left Foot',
-      'rightUpperLeg': 'Right Upper Leg',
-      'rightLowerLeg': 'Right Lower Leg',
-      'rightFoot': 'Right Foot',
-      'neck': 'Neck'
-    };
-    Object.keys(internalConvention).forEach(internalName => {
-      const hasNode = boneCache[internalName] !== null && boneCache[internalName] !== undefined;
-      const statusSymbol = hasNode ? '<span style="color:#4fda6e;">✔️</span>' : '<span style="color:#f7a54b;">❌</span>';
-      const div = document.createElement('div');
-      div.style.display = 'flex';
-      div.style.justifyContent = 'space-between';
-      div.style.padding = '3px 0';
-      div.style.borderBottom = '1px solid #1e1e2e';
-      div.innerHTML = `
-        <span style="color:#e0e0e0; font-size:0.62rem;">${internalName}</span>
-        <span style="font-size:0.62rem;">${statusSymbol}</span>
-      `;
-      compareContainer.appendChild(div);
-    });
-
-    if (currentVrm && currentVrm.humanoid) {
-      const rawBones = Object.keys(currentVrm.humanoid.humanBones || {});
-      if (rawBones.length === 0) {
-        modelContainer.innerHTML = '<span style="color:#888;">No humanoid bones declared</span>';
-      } else {
-        rawBones.forEach(rawName => {
-          const node = currentVrm.humanoid.getNormalizedBoneNode(rawName);
-          const hasNode = node !== null;
-          const div = document.createElement('div');
-          div.style.color = hasNode ? '#e0e0e0' : '#666';
-          div.textContent = `${rawName} (${hasNode ? "Active" : "Null"})`;
-          modelContainer.appendChild(div);
-        });
+    // 3. Solve Hands
+    if (rightHandLandmarks) {
+      trackingFlags.push("R-Hand ✓");
+      const handResult = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
+      if (handResult) {
+        smoothedValues.rightHand = handResult;
+        avatarRig.rigHand("right", handResult, smoothedValues.pose);
       }
+    }
+
+    if (leftHandLandmarks) {
+      trackingFlags.push("L-Hand ✓");
+      const handResult = Kalidokit.Hand.solve(leftHandLandmarks, "Left");
+      if (handResult) {
+        smoothedValues.leftHand = handResult;
+        avatarRig.rigHand("left", handResult, smoothedValues.pose);
+      }
+    }
+
+    // UI Status Updates
+    if (trackingFlags.length > 0) {
+      statusDot.className = 'status-dot live';
+      statusText.textContent = isVideoFilePlaying ? 'Processing Video File' : 'Tracking Active';
+      trackingStatusBadge.textContent = trackingFlags.join(" | ");
     } else {
-      modelContainer.innerHTML = '<span style="color:#888;">No model loaded</span>';
+      statusDot.className = 'status-dot idle';
+      statusText.textContent = 'Searching Target...';
+      trackingStatusBadge.textContent = 'Tracking: Searching';
+    }
+
+    drawLandmarksOverlay(results);
+  }
+
+  // ---- Full Body 2D Skeleton Canvas Overlay ----
+  const POSE_CONNECTIONS = [
+    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Torso & Arms
+    [11, 23], [12, 24], [23, 24],                    // Hips / Pelvis
+    [23, 25], [25, 27], [27, 29], [29, 31],          // Left Leg & Foot
+    [24, 26], [26, 28], [28, 30], [30, 32]           // Right Leg & Foot
+  ];
+
+  function drawLandmarksOverlay(results) {
+    const w = overlayCanvas.width;
+    const h = overlayCanvas.height;
+    overlayCtx.clearRect(0, 0, w, h);
+
+    if (!showSkeleton) return;
+
+    // Draw Pose Skeleton Lines
+    if (results.poseLandmarks) {
+      const pts = results.poseLandmarks.map(pt => ({
+        x: mirrorVideo ? (1 - pt.x) * w : pt.x * w,
+        y: pt.y * h
+      }));
+
+      overlayCtx.strokeStyle = 'rgba(0, 255, 136, 0.8)';
+      overlayCtx.lineWidth = 2;
+
+      POSE_CONNECTIONS.forEach(([i, j]) => {
+        if (pts[i] && pts[j]) {
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(pts[i].x, pts[i].y);
+          overlayCtx.lineTo(pts[j].x, pts[j].y);
+          overlayCtx.stroke();
+        }
+      });
+
+      overlayCtx.fillStyle = '#00ff88';
+      pts.forEach(p => {
+        overlayCtx.beginPath();
+        overlayCtx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+        overlayCtx.fill();
+      });
+    }
+
+    // Draw Hands
+    if (results.rightHandLandmarks) {
+      overlayCtx.fillStyle = '#ff9900';
+      results.rightHandLandmarks.forEach(pt => {
+        const x = mirrorVideo ? (1 - pt.x) * w : pt.x * w;
+        const y = pt.y * h;
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, y, 2, 0, 2 * Math.PI);
+        overlayCtx.fill();
+      });
+    }
+
+    if (results.leftHandLandmarks) {
+      overlayCtx.fillStyle = '#00ccff';
+      results.leftHandLandmarks.forEach(pt => {
+        const x = mirrorVideo ? (1 - pt.x) * w : pt.x * w;
+        const y = pt.y * h;
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, y, 2, 0, 2 * Math.PI);
+        overlayCtx.fill();
+      });
     }
   }
 
-  // ---- Interactive Drag ----
-  function onMouseDown(event) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(jointHandlesGroup.children);
-    if (intersects.length > 0) {
-      isDraggingJoint = true;
-      selectedJointSphere = intersects[0].object;
-      dragStartMouse.set(event.clientX, event.clientY);
-      dragStartQuat.copy(selectedJointSphere.userData.boneNode.quaternion);
-      controls.enabled = false;
-      selectedJointSphere.material.color.setHex(0xffffff);
-      setVrmOpacity(0.45);
-    }
-  }
+  // ---- Initialize MediaPipe Holistic ----
+  async function initTrackingPipeline() {
+    loadingText.textContent = "Initializing Full-Body AI...";
+    holisticInstance = new Holistic({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/${file}`
+    });
 
-  function onMouseMove(event) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    if (isDraggingJoint && selectedJointSphere) {
-      const dx = event.clientX - dragStartMouse.x;
-      const dy = event.clientY - dragStartMouse.y;
-      const boneNode = selectedJointSphere.userData.boneNode;
-      const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-      const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-      const angleX = dy * 0.005;
-      const angleY = dx * 0.005;
-      const qX = new THREE.Quaternion().setFromAxisAngle(cameraRight, angleX);
-      const qY = new THREE.Quaternion().setFromAxisAngle(cameraUp, angleY);
-      const deltaQuat = new THREE.Quaternion().multiplyQuaternions(qY, qX);
-      boneNode.quaternion.copy(dragStartQuat).premultiply(deltaQuat);
-      return;
-    }
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(jointHandlesGroup.children);
-    renderer.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'auto';
-  }
+    holisticInstance.setOptions(CONFIG.holistic);
+    holisticInstance.onResults(processHolisticResults);
 
-  function onMouseUp() {
-    if (isDraggingJoint) {
-      isDraggingJoint = false;
-      if (selectedJointSphere) {
-        selectedJointSphere.material.color.setHex(0x5b8af7);
-        selectedJointSphere = null;
-      }
-      controls.enabled = true;
-      const val = parseFloat(opacitySlider.value);
-      setVrmOpacity(val);
+    cameraUtilsInstance = new Camera(videoEl, {
+      onFrame: async () => {
+        if (!isVideoFilePlaying && videoEl.readyState >= 2) {
+          await holisticInstance.send({ image: videoEl });
+        }
+      },
+      width: CONFIG.camera.width,
+      height: CONFIG.camera.height
+    });
+
+    try {
+      await cameraUtilsInstance.start();
+      statusText.textContent = "Camera Live";
+    } catch (camErr) {
+      console.warn("Camera start warning:", camErr);
+      statusText.textContent = "No Live Camera";
     }
   }
 
@@ -1110,535 +1011,59 @@
     }
   }
 
-  // ---- Smooth Expression Lerp Helper ----
-  function lerpExpression(manager, name, targetValue, delta, speed = 12) {
-    if (!manager) return;
-    const currentValue = manager.getValue(name) || 0;
-    const newValue = THREE.MathUtils.lerp(currentValue, targetValue, Math.min(1, delta * speed));
-    manager.setValue(name, newValue);
-  }
-
-  // ---- Apply pose, face, hands ----
-  function applyRotation(boneName, rot, time, confidence = 1.0) {
-    if (!currentVrm || !rot) return;
-    if (confidence < 0.3) return;
-    const node = boneCache[boneName];
-    if (!node) return;
-
-    let mult = 1.0;
-    const lower = boneName.toLowerCase();
-    if (lower.includes('upperarm') || lower.includes('lowerarm')) mult = 1.3;
-    else if (lower.includes('upperleg') || lower.includes('lowerleg')) mult = 1.5;
-    else if (lower.includes('spine') || lower.includes('chest') || lower.includes('upperchest')) mult = 0.6;
-    else if (lower.includes('shoulder')) mult = 0.8;
-
-    const euler = new THREE.Euler(rot.x * mult, rot.y * mult, rot.z * mult, 'XYZ');
-    const constraints = JOINT_CONSTRAINTS[boneName];
-    if (constraints) clampEuler(euler, constraints);
-
-    const targetQuat = new THREE.Quaternion().setFromEuler(euler);
-    const qx = targetQuat.x, qy = targetQuat.y, qz = targetQuat.z, qw = targetQuat.w;
-    const fx = getFilter(boneName + '_x', 'x').update(qx, time);
-    const fy = getFilter(boneName + '_y', 'y').update(qy, time);
-    const fz = getFilter(boneName + '_z', 'z').update(qz, time);
-    const fw = getFilter(boneName + '_w', 'w').update(qw, time);
-    const filteredQuat = new THREE.Quaternion(fx, fy, fz, fw).normalize();
-    node.quaternion.slerp(filteredQuat, 0.85);
-  }
-
-  function applyPosition(boneName, pos, time, confidence = 1.0) {
-    if (!currentVrm || !pos) return;
-    if (confidence < 0.3) return;
-    const node = boneCache[boneName];
-    if (!node) return;
-    const px = getFilter(boneName + '_posX', 'x').update(pos.x, time);
-    const py = getFilter(boneName + '_posY', 'y').update(pos.y, time);
-    const pz = getFilter(boneName + '_posZ', 'z').update(pos.z, time);
-    node.position.set(px, py, pz);
-  }
-
-  function applyPose(pose, time) {
-    if (!currentVrm || !pose) return;
-
-    if (pose.Hips?.position) {
-      const hipPos = {
-        x: -pose.Hips.position.x,
-        y: pose.Hips.position.y + 1.0,
-        z: -pose.Hips.position.z
-      };
-      applyPosition('hips', hipPos, time, 1.0);
-    }
-    if (pose.Hips?.rotation) {
-      applyRotation('hips', pose.Hips.rotation, time, 1.0);
-    }
-    if (pose.Spine) {
-      applyRotation('spine', pose.Spine, time, 1.0);
-      applyRotation('chest', pose.Spine, time, 0.8);
-    }
-    if (pose.LeftShoulder) applyRotation('leftShoulder', pose.LeftShoulder, time, 1.0);
-    if (pose.RightShoulder) applyRotation('rightShoulder', pose.RightShoulder, time, 1.0);
-    if (pose.LeftUpperArm) applyRotation('leftUpperArm', pose.LeftUpperArm, time, 1.0);
-    if (pose.LeftLowerArm) applyRotation('leftLowerArm', pose.LeftLowerArm, time, 1.0);
-    if (pose.RightUpperArm) applyRotation('rightUpperArm', pose.RightUpperArm, time, 1.0);
-    if (pose.RightLowerArm) applyRotation('rightLowerArm', pose.RightLowerArm, time, 1.0);
-    if (pose.LeftUpperLeg) applyRotation('leftUpperLeg', pose.LeftUpperLeg, time, 1.0);
-    if (pose.LeftLowerLeg) applyRotation('leftLowerLeg', pose.LeftLowerLeg, time, 1.0);
-    if (pose.RightUpperLeg) applyRotation('rightUpperLeg', pose.RightUpperLeg, time, 1.0);
-    if (pose.RightLowerLeg) applyRotation('rightLowerLeg', pose.RightLowerLeg, time, 1.0);
-    if (pose.LeftFoot) applyRotation('leftFoot', pose.LeftFoot, time, 1.0);
-    if (pose.RightFoot) applyRotation('rightFoot', pose.RightFoot, time, 1.0);
-  }
-
-  function applyFace(face, delta) {
-    if (!currentVrm || !face) return;
-    const neckNode = boneCache['neck'];
-    if (neckNode) {
-      const euler = new THREE.Euler(face.head.x, face.head.y, face.head.z, 'XYZ');
-      const q = new THREE.Quaternion().setFromEuler(euler);
-      neckNode.quaternion.slerp(q, Math.min(1, delta * 15));
-    }
-
-    if (face.pupil && lookAtTarget) {
-      lookAtTarget.position.x = THREE.MathUtils.lerp(lookAtTarget.position.x, -face.pupil.x * 2.5, delta * 8);
-      lookAtTarget.position.y = THREE.MathUtils.lerp(lookAtTarget.position.y, face.pupil.y * 2.5, delta * 8);
-    }
-
-    const manager = currentVrm.expressionManager || currentVrm.blendShapeProxy;
-    if (!manager) return;
-
-    const blinkL = Math.max(0, Math.min(1, 1 - face.eye.l));
-    const blinkR = Math.max(0, Math.min(1, 1 - face.eye.r));
-    const stable = Kalidokit.Face.stabilizeBlink({ l: blinkL, r: blinkR }, face.head.y);
-
-    const blinkLeftName = currentVrm.expressionManager ? 'blinkLeft' : 'blink_l';
-    const blinkRightName = currentVrm.expressionManager ? 'blinkRight' : 'blink_r';
-    const aName = currentVrm.expressionManager ? 'aa' : 'a';
-    const iName = currentVrm.expressionManager ? 'ih' : 'i';
-    const uName = currentVrm.expressionManager ? 'ou' : 'u';
-    const eName = currentVrm.expressionManager ? 'ee' : 'e';
-    const oName = currentVrm.expressionManager ? 'oh' : 'o';
-
-    lerpExpression(manager, blinkLeftName, stable.l, delta);
-    lerpExpression(manager, blinkRightName, stable.r, delta);
-
-    const mouth = face.mouth.shape;
-    lerpExpression(manager, iName, mouth.I || 0, delta);
-    lerpExpression(manager, aName, mouth.A || 0, delta);
-    lerpExpression(manager, eName, mouth.E || 0, delta);
-    lerpExpression(manager, oName, mouth.O || 0, delta);
-    lerpExpression(manager, uName, mouth.U || 0, delta);
-  }
-
-  function applyHand(hand, side) {
-    if (!currentVrm || !hand) return;
-    const prefix = side === 'Left' ? 'left' : 'right';
-    const wristNode = boneCache[prefix + 'Hand'];
-    if (wristNode) {
-      const rot = hand[prefix.charAt(0).toUpperCase() + prefix.slice(1) + 'Wrist'];
-      if (rot) {
-        const euler = new THREE.Euler(rot.x, rot.y, rot.z, 'XYZ');
-        const q = new THREE.Quaternion().setFromEuler(euler);
-        wristNode.quaternion.slerp(q, 0.7);
+  // ---- Video File Processing Loop ----
+  async function processVideoFileFrame() {
+    if (isVideoFilePlaying && !videoEl.paused && !videoEl.ended) {
+      if (videoEl.readyState >= 2) {
+        await holisticInstance.send({ image: videoEl });
       }
-    }
-    const fingerNames = ['Thumb','Index','Middle','Ring','Little'];
-    const segmentNames = ['Proximal', 'Intermediate', 'Distal'];
-    fingerNames.forEach(f => {
-      segmentNames.forEach(seg => {
-        const boneName = prefix + f + seg;
-        const node = boneCache[boneName];
-        if (node) {
-          const rot = hand[boneName];
-          if (rot) {
-            const euler = new THREE.Euler(rot.x, rot.y, rot.z, 'XYZ');
-            const q = new THREE.Quaternion().setFromEuler(euler);
-            node.quaternion.slerp(q, 0.7);
-          }
-        }
-      });
-    });
-  }
-
-  function applyProceduralIdle(time, delta) {
-    if (!currentVrm || isDraggingJoint) return;
-    const spineNode = boneCache['spine'];
-    const chestNode = boneCache['chest'];
-    const breath = Math.sin(time * 2.2) * 0.02;
-    const sway = Math.cos(time * 1.1) * 0.012;
-
-    if (spineNode) {
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(breath, sway, 0, 'XYZ'));
-      spineNode.quaternion.slerp(q, delta * 2);
-    }
-    if (chestNode) {
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(breath * 0.5, -sway * 0.5, 0, 'XYZ'));
-      chestNode.quaternion.slerp(q, delta * 2);
+      requestAnimationFrame(processVideoFileFrame);
     }
   }
 
-  // ---- MediaPipe Holistic ----
-  const holistic = new Holistic({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/${file}`
-  });
-  holistic.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
-    enableSegmentation: false,
-    refineFaceLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  });
-
-  let latestResults = null;
-  let newResultsAvailable = false;
-  let lastDetectionTime = 0;
-
-  holistic.onResults((results) => {
-    latestResults = results;
-    newResultsAvailable = true;
-  });
-
-  // ---- 2D Skeleton ----
-  const BONE_CONNECTIONS = [
-    [11,12],[11,13],[13,15],[12,14],[14,16],
-    [11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],
-    [27,29],[29,31],[28,30],[30,32],
-    [0,11],[0,12],
-    [15,17],[15,19],[15,21],[16,18],[16,20],[16,22]
-  ];
-  const LEFT_JOINTS = new Set([11,13,15,17,19,21,23,25,27,29,31]);
-  const RIGHT_JOINTS = new Set([12,14,16,18,20,22,24,26,28,30,32]);
-
-  function drawSkeleton() {
-    const canvas = overlayCanvas;
-    const ctx = overlayCtx;
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    if (!showSkeleton || !latestPoseLandmarks || latestPoseLandmarks.length < 33) {
-      if (poseDetected) {
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('⏳ acquiring pose…', w/2, h/2+8);
-      }
-      return;
-    }
-
-    const landmarks = latestPoseLandmarks;
-    const pts = landmarks.map(l => ({
-      x: mirrorVideo ? (1 - l.x) * w : l.x * w,
-      y: l.y * h,
-      vis: l.visibility || 0,
-    }));
-
-    for (const [i, j] of BONE_CONNECTIONS) {
-      const a = pts[i], b = pts[j];
-      const avgVis = (a.vis + b.vis) / 2;
-      if (avgVis < 0.25) continue;
-      const alpha = Math.min(1, avgVis + 0.25);
-      const isLeft = LEFT_JOINTS.has(i) || LEFT_JOINTS.has(j);
-      const isRight = RIGHT_JOINTS.has(i) || RIGHT_JOINTS.has(j);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = isLeft ? `rgba(80,180,255,${alpha})` :
-                       isRight ? `rgba(255,140,180,${alpha})` : `rgba(200,200,255,${alpha*0.7})`;
-      ctx.lineWidth = isLeft || isRight ? 3 : 2;
-      ctx.lineCap = 'round';
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 6;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    for (let i = 0; i < pts.length; i++) {
-      const p = pts[i];
-      if (p.vis < 0.25) continue;
-      const alpha = Math.min(1, p.vis + 0.2);
-      const isLeft = LEFT_JOINTS.has(i);
-      const isRight = RIGHT_JOINTS.has(i);
-      const radius = isLeft || isRight ? 5 : 3.5;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, radius, 0, Math.PI*2);
-      ctx.fillStyle = isLeft ? `rgba(80,180,255,${alpha})` :
-                      isRight ? `rgba(255,140,180,${alpha})` : `rgba(220,220,255,${alpha*0.8})`;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    if (poseDetected) {
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('● LIVE', 12, 22);
-    }
-  }
-
-  function resizeOverlayCanvas() {
-    const rect = videoEl.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.round(rect.width * dpr);
-    const h = Math.round(rect.height * dpr);
-    if (overlayCanvas.width !== w || overlayCanvas.height !== h) {
-      overlayCanvas.width = w;
-      overlayCanvas.height = h;
-      overlayCanvas.style.width = rect.width + 'px';
-      overlayCanvas.style.height = rect.height + 'px';
-    }
-  }
-
-  // ---- Camera / Video ----
-  async function startCameraStream() {
-    try {
-      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user', frameRate: { ideal: 30 } },
-        audio: false
-      });
-      cameraStream = stream;
-      videoEl.srcObject = stream;
-      videoEl.loop = false;
-      await videoEl.play();
-      await new Promise((resolve) => {
-        const check = () => {
-          if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) resolve();
-          else requestAnimationFrame(check);
-        };
-        check();
-      });
-      resizeOverlayCanvas();
-      statusText.textContent = 'Camera active';
-      fileNameDisplay.textContent = '';
-      useCamera = true;
-      btnCamera.classList.add('hidden');
-      btnUpload.textContent = '📁 Video';
-    } catch (err) {
-      console.error('[Camera]', err);
-      statusText.textContent = 'Camera access denied';
-      throw err;
-    }
-  }
-
-  function stopCamera() {
-    if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-    videoEl.srcObject = null;
-  }
-
-  function releaseVideoFile() {
-    if (currentObjectURL) { URL.revokeObjectURL(currentObjectURL); currentObjectURL = null; }
-    videoEl.src = '';
-    videoEl.loop = false;
-    fileNameDisplay.textContent = '';
-  }
-
-  function loadVideoFile(file) {
-    stopCamera();
-    releaseVideoFile();
-    const url = URL.createObjectURL(file);
-    currentObjectURL = url;
-    videoEl.srcObject = null;
-    videoEl.src = url;
-    videoEl.loop = true;
-    videoEl.muted = false;
-    videoEl.play().catch(e => console.warn('[Video] play:', e));
-    useCamera = false;
-    btnCamera.classList.remove('hidden');
-    btnUpload.textContent = '📁 Change';
-    const short = file.name.length > 18 ? file.name.slice(0,16)+'…' : file.name;
-    fileNameDisplay.textContent = short;
-    statusText.textContent = 'Playing file';
-    resizeOverlayCanvas();
-  }
-
-  // ---- Main render loop ----
-  function renderLoop() {
-    requestAnimationFrame(renderLoop);
+  // ---- Animation Frame Render Loop ----
+  function animate() {
+    requestAnimationFrame(animate);
     const delta = clock.getDelta();
-    const time = clock.getElapsedTime();
-
-    if (newResultsAvailable && latestResults) {
-      newResultsAvailable = false;
-      const results = latestResults;
-      const now = performance.now();
-      if (now - lastProcessed >= PROCESS_INTERVAL) {
-        lastProcessed = now;
-        const hasPose = results.poseLandmarks && results.poseLandmarks.length === 33;
-        const hasFace = results.faceLandmarks && results.faceLandmarks.length > 0;
-        const hasLeftHand = results.leftHandLandmarks && results.leftHandLandmarks.length > 0;
-        const hasRightHand = results.rightHandLandmarks && results.rightHandLandmarks.length > 0;
-
-        if (hasPose) {
-          latestPoseLandmarks = results.poseLandmarks;
-          const pose3D = results.poseWorldLandmarks || results.za || results.ea;
-          latestWorldLandmarks = pose3D || null;
-          poseDetected = true;
-          lastDetectionTime = now;
-          statusDot.className = 'status-dot live';
-          statusText.textContent = 'Tracking';
-
-          let poseResult = null;
-          if (pose3D && results.poseLandmarks) {
-            try {
-              poseResult = Kalidokit.Pose.solve(pose3D, results.poseLandmarks, {
-                runtime: 'mediapipe',
-                video: videoEl,
-              });
-            } catch (e) { console.error('[Kalidokit] Pose error:', e); }
-          }
-
-          if (currentVrm && !isDraggingJoint) {
-            applyPose(poseResult, time);
-          }
-        } else {
-          if (now - lastDetectionTime > 300) {
-            poseDetected = false;
-            statusDot.className = 'status-dot idle';
-            statusText.textContent = 'No target';
-            applyProceduralIdle(time, delta);
-          }
-        }
-
-        // Face
-        if (enableFace && hasFace && results.faceLandmarks) {
-          latestFaceLandmarks = results.faceLandmarks;
-          try {
-            const face = Kalidokit.Face.solve(results.faceLandmarks, {
-              runtime: 'mediapipe',
-              video: videoEl,
-            });
-            if (currentVrm && !isDraggingJoint) applyFace(face, delta);
-          } catch (e) { console.error('[Kalidokit] Face error:', e); }
-        }
-
-        // Hands
-        if (enableHands) {
-          if (hasLeftHand && results.leftHandLandmarks) {
-            latestLeftHand = results.leftHandLandmarks;
-            try {
-              const side = mirrorVideo ? 'Right' : 'Left';
-              const hand = Kalidokit.Hand.solve(results.leftHandLandmarks, side);
-              if (currentVrm && !isDraggingJoint) applyHand(hand, side);
-            } catch (e) { console.error('[Kalidokit] Left hand error:', e); }
-          }
-          if (hasRightHand && results.rightHandLandmarks) {
-            latestRightHand = results.rightHandLandmarks;
-            try {
-              const side = mirrorVideo ? 'Left' : 'Right';
-              const hand = Kalidokit.Hand.solve(results.rightHandLandmarks, side);
-              if (currentVrm && !isDraggingJoint) applyHand(hand, side);
-            } catch (e) { console.error('[Kalidokit] Right hand error:', e); }
-          }
-        }
-
-        // FPS counter
-        frameCount++;
-        if (now - fpsTime > 1000) {
-          currentFps = frameCount;
-          frameCount = 0;
-          fpsTime = now;
-          fpsBadge.textContent = currentFps + ' fps';
-          if (autoQualityEnabled) {
-            const complexity = holistic.options?.modelComplexity || 1;
-            if (currentFps < 45 && complexity > 0) {
-              holistic.setOptions({ modelComplexity: 0 });
-            } else if (currentFps > 55 && complexity < 1) {
-              holistic.setOptions({ modelComplexity: 1 });
-            }
-          }
-        }
-        drawSkeleton();
-      }
-    } else if (!poseDetected) {
-      applyProceduralIdle(time, delta);
-    }
-
-    if (currentVrm) {
-      currentVrm.update(delta);
-      updateJointHandles();
-    }
-    controls.update();
-    renderer.render(scene, camera);
+    if (avatarRig) avatarRig.update(delta);
+    if (controls) controls.update();
+    if (renderer && scene && camera) renderer.render(scene, camera);
   }
 
-  async function detectionLoop(now) {
-    if (videoEl.readyState >= 2 && (now - lastProcessed >= PROCESS_INTERVAL)) {
-      try {
-        await holistic.send({ image: videoEl });
-      } catch (e) { /* drop */ }
-    }
-    requestAnimationFrame(detectionLoop);
-  }
-
-  // ---- Init Display Mode ----
+  // ---- Display App Init ----
   async function initDisplayApp() {
     if (appInitialized) return;
     appInitialized = true;
-    loadingOverlay.classList.remove('hidden');
 
-    try {
-      loadingText.textContent = 'Initializing 3D Scene…';
-      initThreeJS();
+    avatarRig = new AvatarRig();
+    initThreeJS();
+    loadVRM(CONFIG.vrmUrl);
 
-      loadingText.textContent = 'Loading VRM Model…';
-      const defaultVrmUrl = 'https://cdn.glitch.com/29e07830-2317-4b15-a044-135e73c7f840%2FAshtra.vrm?v=1630342336981';
-      loadVRM(defaultVrmUrl);
+    // Generate unique Peer Code for phone pairing
+    myPeerCode = Math.random().toString(36).substring(2,7).toUpperCase();
+    peerCodeBadge.textContent = `CODE: ${myPeerCode}`;
+    peerCodeBadge.classList.remove('hidden');
 
-      loadingText.textContent = 'Setting up Peer Connection…';
-      myPeerCode = Math.random().toString(36).substring(2,7).toUpperCase();
-      peerCodeBadge.textContent = `CODE: ${myPeerCode}`;
-      peerCodeBadge.classList.remove('hidden');
-
-      peer = new Peer('WM-MOCAP-' + myPeerCode);
-      peer.on('open', () => {
-        statusText.textContent = `Link Code: ${myPeerCode}`;
+    peer = new Peer('WM-MOCAP-' + myPeerCode);
+    peer.on('call', (call) => {
+      call.answer();
+      activeCall = call;
+      call.on('stream', (stream) => {
+        if (cameraUtilsInstance) cameraUtilsInstance.stop();
+        isVideoFilePlaying = false;
+        videoEl.srcObject = stream;
+        videoEl.play();
+        useCamera = false;
+        btnCamera.classList.remove('hidden');
+        statusText.textContent = 'Phone camera active';
       });
+    });
 
-      peer.on('call', (call) => {
-        call.answer();
-        activeCall = call;
-        call.on('stream', (stream) => {
-          stopCamera(); releaseVideoFile();
-          videoEl.srcObject = stream;
-          videoEl.play();
-          useCamera = false;
-          btnCamera.classList.remove('hidden');
-          statusText.textContent = 'Phone connected';
-        });
-        call.on('close', () => {
-          statusText.textContent = 'Phone disconnected';
-          activeCall = null;
-        });
-      });
-
-      loadingText.textContent = 'Starting Camera…';
-      try {
-        await startCameraStream();
-      } catch (camErr) {
-        console.warn('Camera stream failed, proceeding anyway:', camErr);
-        statusText.textContent = 'No Camera';
-      }
-
-      loadingText.textContent = 'Ready';
-      await new Promise(r => setTimeout(r, 400));
-      loadingOverlay.classList.add('hidden');
-      if (statusText.textContent === 'Waiting…') {
-        statusText.textContent = 'Ready';
-      }
-      statusDot.className = 'status-dot idle';
-
-      renderLoop();
-      requestAnimationFrame(detectionLoop);
-    } catch (err) {
-      console.error('[Init] fatal error:', err);
-      loadingText.textContent = 'Fatal Error: ' + err.message;
-    }
+    await initTrackingPipeline();
+    animate();
   }
 
-  // ---- Role Handlers ----
+  // ---- Event Handlers ----
   btnRoleDisplay.addEventListener('click', () => {
     setupView.classList.add('hidden');
     displayView.classList.remove('hidden');
@@ -1651,92 +1076,81 @@
     peer = new Peer();
   });
 
-  // Phone Mode Streamer logic
   btnConnectToDisplay.addEventListener('click', async () => {
     const code = targetPeerCodeInput.value.trim().toUpperCase();
-    if (!code || code.length !== 5) {
-      alert('Please enter a valid 5-character Code shown on the Display PC.');
-      return;
-    }
-
+    if (!code || code.length !== 5) return alert('Enter a valid 5-character Link Code.');
     try {
-      phoneStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: phoneFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false
       });
-      phoneVideoFeed.srcObject = phoneStream;
-
-      const call = peer.call('WM-MOCAP-' + code, phoneStream);
-      activeCall = call;
-
+      phoneVideoFeed.srcObject = stream;
+      activeCall = peer.call('WM-MOCAP-' + code, stream);
       phoneConnectContainer.classList.add('hidden');
       phoneActiveContainer.classList.remove('hidden');
-
-      call.on('close', () => {
-        alert('Display connection closed.');
-        location.reload();
-      });
     } catch (err) {
-      alert('Could not access mobile camera: ' + err.message);
-    }
-  });
-
-  btnFlipPhoneCam.addEventListener('click', async () => {
-    if (!phoneStream) return;
-    phoneFacingMode = phoneFacingMode === 'user' ? 'environment' : 'user';
-    phoneStream.getTracks().forEach(t => t.stop());
-    try {
-      phoneStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: phoneFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false
-      });
-      phoneVideoFeed.srcObject = phoneStream;
-      if (activeCall && activeCall.peerConnection) {
-        const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) sender.replaceTrack(phoneStream.getVideoTracks()[0]);
-      }
-    } catch (err) {
-      alert('Failed to flip camera: ' + err.message);
+      alert('Camera access failed: ' + err.message);
     }
   });
 
   btnDisconnectPhone.addEventListener('click', () => {
+    if (activeCall) activeCall.close();
     location.reload();
   });
 
-  // ---- Controls / Buttons ----
   btnMirror.addEventListener('click', () => {
     mirrorVideo = !mirrorVideo;
     btnMirror.classList.toggle('active');
     videoEl.style.transform = mirrorVideo ? 'scaleX(-1)' : 'scaleX(1)';
-    resizeOverlayCanvas();
-    drawSkeleton();
   });
   videoEl.style.transform = 'scaleX(-1)';
 
   btnResetCam.addEventListener('click', () => {
-    controls.target.set(0,0,0);
-    camera.position.set(0,0.3,1.8);
+    controls.target.set(0, 1.0, 0);
+    camera.position.set(0, 1.2, 3.2);
     controls.update();
-    btnResetCam.classList.add('active');
-    setTimeout(() => btnResetCam.classList.remove('active'), 300);
   });
 
   btnToggleSkeleton.addEventListener('click', () => {
     showSkeleton = !showSkeleton;
     btnToggleSkeleton.classList.toggle('active');
-    btnToggleSkeleton.textContent = showSkeleton ? '🦴 Overlay' : '🦴 Hidden';
-    if (!showSkeleton) overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
-    else drawSkeleton();
+    if (!showSkeleton) overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   });
-  btnToggleSkeleton.classList.add('active');
 
+  // Custom MP4 Upload
   btnUpload.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    loadVideoFile(file);
-    fileInput.value = '';
+
+    if (cameraUtilsInstance) cameraUtilsInstance.stop();
+
+    if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
+    currentObjectURL = URL.createObjectURL(file);
+    
+    videoEl.srcObject = null;
+    videoEl.src = currentObjectURL;
+    videoEl.loop = true;
+    videoEl.muted = true;
+    videoEl.play();
+
+    isVideoFilePlaying = true;
+    btnCamera.classList.remove('hidden');
+    fileNameDisplay.textContent = file.name;
+    statusText.textContent = 'Playing MP4 File';
+
+    videoEl.onplay = () => processVideoFileFrame();
+  });
+
+  // Return to Live Webcam
+  btnCamera.addEventListener('click', async () => {
+    isVideoFilePlaying = false;
+    if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
+    videoEl.src = "";
+    btnCamera.classList.add('hidden');
+    fileNameDisplay.textContent = "";
+    await cameraUtilsInstance.start();
+    statusText.textContent = "Camera Live";
   });
 
   btnLoadVrm.addEventListener('click', () => vrmInput.click());
@@ -1749,33 +1163,30 @@
     vrmInput.value = '';
   });
 
-  btnCamera.addEventListener('click', async () => {
-    releaseVideoFile();
-    try { await startCameraStream(); } catch (_) { statusText.textContent = 'Camera restart failed'; }
-  });
-
   btnPhone.addEventListener('click', () => {
     if (myPeerCode) {
-      alert(`PC Link Code: ${myPeerCode}\nConnect from phone camera by choosing 'Phone Camera Source'.`);
+      alert(`PC Link Code: ${myPeerCode}\nOpen this app on your phone, select "Phone Camera Streamer", and enter code: ${myPeerCode}`);
     }
   });
 
   dashToggle.addEventListener('click', () => dashboard.classList.toggle('hidden'));
   dashClose.addEventListener('click', () => dashboard.classList.add('hidden'));
 
-  btnShowBoneInspector.addEventListener('click', () => {
-    boneInspectorPanel.classList.toggle('hidden');
-    populateBoneInspector();
-  });
-  closeBoneInspector.addEventListener('click', () => {
-    boneInspectorPanel.classList.add('hidden');
+  document.getElementById('smoothSlider').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    CONFIG.tracking.defaultLerpAmount = val;
+    document.getElementById('smoothVal').textContent = val.toFixed(2);
   });
 
-  const opacitySlider = document.getElementById('opacitySlider');
-  const opacityVal = document.getElementById('opacityVal');
-  opacitySlider.addEventListener('input', () => {
-    const val = parseFloat(opacitySlider.value);
-    opacityVal.textContent = val.toFixed(2);
+  document.getElementById('deadZoneSlider').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    CONFIG.tracking.deadZone = val;
+    document.getElementById('deadZoneVal').textContent = val.toFixed(3);
+  });
+
+  document.getElementById('opacitySlider').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    document.getElementById('opacityVal').textContent = val.toFixed(2);
     setVrmOpacity(val);
   });
 
@@ -1790,27 +1201,6 @@
       });
     }
   });
-
-  const smoothSlider = document.getElementById('smoothSlider');
-  const smoothVal = document.getElementById('smoothVal');
-  smoothSlider.addEventListener('input', () => {
-    smoothingVal = parseFloat(smoothSlider.value);
-    smoothVal.textContent = smoothingVal.toFixed(2);
-    filterMap.clear();
-  });
-
-  document.getElementById('autoQualityToggle').addEventListener('change', (e) => {
-    autoQualityEnabled = e.target.checked;
-  });
-
-  document.getElementById('enableFace').addEventListener('change', (e) => {
-    enableFace = e.target.checked;
-  });
-
-  document.getElementById('enableHands').addEventListener('change', (e) => {
-    enableHands = e.target.checked;
-  });
-
 </script>
 </body>
 </html>
