@@ -391,6 +391,7 @@
       </div>
       <p style="font-size:0.7rem; color:#888; margin-top:8px;">Camera stream active. Keep device still.</p>
       <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn" id="btnFlipPhoneCam" style="flex:1; justify-content:center;">📷 Flip Cam</button>
         <button class="btn" id="btnDisconnectPhone" style="flex:1; justify-content:center; background:#3a1818; border-color:#5a2222; color:#ff8888;">Disconnect</button>
       </div>
     </div>
@@ -423,6 +424,7 @@
 
   <div class="controls-bar">
     <button class="btn active" id="btnMirror">🪞 Mirror</button>
+    <button class="btn" id="btnFlipCam">📷 Switch Cam</button>
     <button class="btn" id="btnResetCam">🔄 Reset Cam</button>
     <button class="btn active" id="btnToggleSkeleton">🦴 Skeleton</button>
     <button class="btn" id="btnUpload">📁 Load MP4 Video</button>
@@ -519,6 +521,7 @@
   const peerCodeBadge = document.getElementById('peerCodeBadge');
 
   const btnMirror = document.getElementById('btnMirror');
+  const btnFlipCam = document.getElementById('btnFlipCam');
   const btnResetCam = document.getElementById('btnResetCam');
   const btnToggleSkeleton = document.getElementById('btnToggleSkeleton');
   const btnUpload = document.getElementById('btnUpload');
@@ -537,12 +540,15 @@
   const phoneConnectContainer = document.getElementById('phoneConnectContainer');
   const phoneActiveContainer = document.getElementById('phoneActiveContainer');
   const phoneVideoFeed = document.getElementById('phoneVideoFeed');
+  const btnFlipPhoneCam = document.getElementById('btnFlipPhoneCam');
   const btnDisconnectPhone = document.getElementById('btnDisconnectPhone');
 
   // ---- Application State ----
   let mirrorVideo = true;
   let showSkeleton = true;
   let isVideoFilePlaying = false;
+  let currentFacingMode = "user"; // "user" (front) or "environment" (rear)
+  let phoneFacingMode = "user";
   let currentObjectURL = null;
   let holisticInstance = null;
   let currentVrm = null;
@@ -575,23 +581,19 @@
       this.hipsRestPosition = null;
     }
 
-    // Helper to find VRM bone node across schema and name variations
     getBone(boneName) {
       if (!this.vrm || !this.vrm.humanoid) return null;
 
-      // 1. Try schema lookup (e.g. "LeftIndexProximal" -> "leftIndexProximal")
       const schemaName = THREE_VRM.VRMSchema.HumanoidBoneName[boneName];
       if (schemaName) {
         const bone = this.vrm.humanoid.getBoneNode(schemaName);
         if (bone) return bone;
       }
 
-      // 2. Try direct camelCase
       const camelName = boneName.charAt(0).toLowerCase() + boneName.slice(1);
       const boneDirect = this.vrm.humanoid.getBoneNode(camelName);
       if (boneDirect) return boneDirect;
 
-      // 3. Fallback for thumb metacarpal / proximal naming variations
       if (boneName.includes("ThumbProximal")) {
         const metaName = boneName.replace("ThumbProximal", "ThumbMetacarpal");
         const metaSchema = THREE_VRM.VRMSchema.HumanoidBoneName[metaName];
@@ -674,7 +676,6 @@
     rigPose(poseResult) {
       if (!this.vrm || !poseResult) return;
 
-      // 1. Root / Hips Motion
       if (poseResult.Hips) {
         if (poseResult.Hips.rotation) {
           this.rigRotation("Hips", poseResult.Hips.rotation, 0.7, 0.7);
@@ -693,29 +694,24 @@
         }
       }
 
-      // 2. Torso / Spine & Chest
       if (poseResult.Spine) {
         this.rigRotation("Chest", poseResult.Spine, 0.25, 0.6);
         this.rigRotation("Spine", poseResult.Spine, 0.35, 0.6);
       }
 
-      // 3. Shoulders / Clavicles
       if (poseResult.RightShoulder) this.rigRotation("RightShoulder", poseResult.RightShoulder, 0.5, 0.6);
       if (poseResult.LeftShoulder) this.rigRotation("LeftShoulder", poseResult.LeftShoulder, 0.5, 0.6);
 
-      // 4. Arms & Elbows
       if (poseResult.RightUpperArm) this.rigRotation("RightUpperArm", poseResult.RightUpperArm, 1, 0.8);
       if (poseResult.RightLowerArm) this.rigRotation("RightLowerArm", poseResult.RightLowerArm, 1, 0.8);
       if (poseResult.LeftUpperArm) this.rigRotation("LeftUpperArm", poseResult.LeftUpperArm, 1, 0.8);
       if (poseResult.LeftLowerArm) this.rigRotation("LeftLowerArm", poseResult.LeftLowerArm, 1, 0.8);
 
-      // 5. Legs & Knees
       if (poseResult.RightUpperLeg) this.rigRotation("RightUpperLeg", poseResult.RightUpperLeg, 1, 0.8);
       if (poseResult.RightLowerLeg) this.rigRotation("RightLowerLeg", poseResult.RightLowerLeg, 1, 0.8);
       if (poseResult.LeftUpperLeg) this.rigRotation("LeftUpperLeg", poseResult.LeftUpperLeg, 1, 0.8);
       if (poseResult.LeftLowerLeg) this.rigRotation("LeftLowerLeg", poseResult.LeftLowerLeg, 1, 0.8);
 
-      // 6. Feet / Ankles
       if (poseResult.RightFoot) this.rigRotation("RightFoot", poseResult.RightFoot, 1, 0.8);
       if (poseResult.LeftFoot) this.rigRotation("LeftFoot", poseResult.LeftFoot, 1, 0.8);
     }
@@ -724,7 +720,6 @@
       if (!this.vrm || !handResult) return;
       const sidePrefix = side === "left" ? "Left" : "Right";
 
-      // Rig wrist / hand base rotation
       const wristKey = `${sidePrefix}Wrist`;
       const handPoseKey = `${sidePrefix}Hand`;
       
@@ -736,10 +731,8 @@
         }, 1, 0.8, false);
       }
 
-      // Rig all individual finger joints (Proximal, Intermediate, Distal for Thumb, Index, Middle, Ring, Little)
       for (const [key, rotation] of Object.entries(handResult)) {
         if (key.endsWith("Wrist") || !rotation) continue;
-        // Apply finger rotations directly without deadzone filtering
         this.rigRotation(key, rotation, 1.1, 0.85, false);
       }
     }
@@ -776,7 +769,6 @@
     controls.maxDistance = 100;
     controls.update();
 
-    // Lighting
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(2, 4, 2);
     dirLight.castShadow = true;
@@ -940,10 +932,10 @@
 
   // ---- Full Body 2D Skeleton Canvas Overlay ----
   const POSE_CONNECTIONS = [
-    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Torso & Arms
-    [11, 23], [12, 24], [23, 24],                    // Hips / Pelvis
-    [23, 25], [25, 27], [27, 29], [29, 31],          // Left Leg & Foot
-    [24, 26], [26, 28], [28, 30], [30, 32]           // Right Leg & Foot
+    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+    [11, 23], [12, 24], [23, 24],
+    [23, 25], [25, 27], [27, 29], [29, 31],
+    [24, 26], [26, 28], [28, 30], [30, 32]
   ];
 
   function drawLandmarksOverlay(results) {
@@ -953,7 +945,6 @@
 
     if (!showSkeleton) return;
 
-    // Draw Pose Skeleton Lines
     if (results.poseLandmarks) {
       const pts = results.poseLandmarks.map(pt => ({
         x: mirrorVideo ? (1 - pt.x) * w : pt.x * w,
@@ -980,7 +971,6 @@
       });
     }
 
-    // Draw Hands
     if (results.rightHandLandmarks) {
       overlayCtx.fillStyle = '#ff9900';
       results.rightHandLandmarks.forEach(pt => {
@@ -1049,15 +1039,16 @@
     videoEl.src = "";
   }
 
-  // ---- Start Live Webcam Stream ----
-  async function startWebcam() {
+  // ---- Start Live Webcam Stream with Front/Rear Switching ----
+  async function startWebcam(facingMode = currentFacingMode) {
+    currentFacingMode = facingMode;
     stopCurrentVideoSource();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
           height: { ideal: 480 },
-          facingMode: "user"
+          facingMode: { ideal: facingMode }
         },
         audio: false
       });
@@ -1065,7 +1056,13 @@
       videoEl.muted = true;
       await videoEl.play();
       isVideoFilePlaying = false;
-      statusText.textContent = "Camera Live";
+
+      // Adjust mirror based on camera facing mode
+      mirrorVideo = (facingMode === "user");
+      btnMirror.classList.toggle('active', mirrorVideo);
+      videoEl.style.transform = mirrorVideo ? 'scaleX(-1)' : 'scaleX(1)';
+
+      statusText.textContent = `Camera Live (${facingMode === "user" ? "Front" : "Rear"})`;
       trackingStatusBadge.textContent = "Tracking: Searching";
       startTrackingLoop();
     } catch (err) {
@@ -1073,6 +1070,36 @@
       statusText.textContent = "Camera Access Error";
       trackingStatusBadge.textContent = "Tracking: Camera Error";
       errorBox.textContent = "Webcam access error: " + err.message + ". Check camera permissions or ensure you are running on http://localhost.";
+    }
+  }
+
+  // ---- Phone Camera Helper Function ----
+  async function startPhoneCameraStream(facingMode = phoneFacingMode) {
+    phoneFacingMode = facingMode;
+    if (phoneVideoFeed.srcObject) {
+      phoneVideoFeed.srcObject.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+      });
+      phoneVideoFeed.srcObject = stream;
+      phoneVideoFeed.style.transform = facingMode === "user" ? "scaleX(-1)" : "scaleX(1)";
+
+      // Seamlessly replace video track if WebRTC call is active
+      if (activeCall && activeCall.peerConnection) {
+        const videoTrack = stream.getVideoTracks()[0];
+        const sender = activeCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(videoTrack);
+        }
+      }
+      return stream;
+    } catch (err) {
+      alert("Phone camera error: " + err.message);
+      return null;
     }
   }
 
@@ -1126,7 +1153,6 @@
     initThreeJS();
     loadVRM(CONFIG.vrmUrl);
 
-    // Generate unique Peer Code for phone pairing
     myPeerCode = Math.random().toString(36).substring(2,7).toUpperCase();
     peerCodeBadge.textContent = `CODE: ${myPeerCode}`;
     peerCodeBadge.classList.remove('hidden');
@@ -1166,18 +1192,18 @@
   btnConnectToDisplay.addEventListener('click', async () => {
     const code = targetPeerCodeInput.value.trim().toUpperCase();
     if (!code || code.length !== 5) return alert('Enter a valid 5-character Link Code.');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false
-      });
-      phoneVideoFeed.srcObject = stream;
+    
+    const stream = await startPhoneCameraStream("user");
+    if (stream) {
       activeCall = peer.call('WM-MOCAP-' + code, stream);
       phoneConnectContainer.classList.add('hidden');
       phoneActiveContainer.classList.remove('hidden');
-    } catch (err) {
-      alert('Camera access failed: ' + err.message);
     }
+  });
+
+  btnFlipPhoneCam.addEventListener('click', async () => {
+    const nextMode = phoneFacingMode === "user" ? "environment" : "user";
+    await startPhoneCameraStream(nextMode);
   });
 
   btnDisconnectPhone.addEventListener('click', () => {
@@ -1190,7 +1216,11 @@
     btnMirror.classList.toggle('active');
     videoEl.style.transform = mirrorVideo ? 'scaleX(-1)' : 'scaleX(1)';
   });
-  videoEl.style.transform = 'scaleX(-1)';
+
+  btnFlipCam.addEventListener('click', async () => {
+    const nextMode = currentFacingMode === "user" ? "environment" : "user";
+    await startWebcam(nextMode);
+  });
 
   btnResetCam.addEventListener('click', () => {
     controls.target.set(0, 1.0, 0);
@@ -1233,7 +1263,7 @@
   btnCamera.addEventListener('click', async () => {
     btnCamera.classList.add('hidden');
     fileNameDisplay.textContent = "";
-    await startWebcam();
+    await startWebcam(currentFacingMode);
   });
 
   btnLoadVrm.addEventListener('click', () => vrmInput.click());
