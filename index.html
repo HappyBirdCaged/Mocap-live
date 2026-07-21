@@ -252,7 +252,7 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
     .loading-text { font-size:0.9rem; color:#aaa; text-align:center; max-width:360px; }
-    .error-box { color: #ff8888; font-size: 0.8rem; margin-top: 10px; max-width: 380px; }
+    .error-box { color: #ff8888; font-size: 0.8rem; margin-top: 10px; max-width: 380px; text-align: center; }
 
     .controls-bar {
       display: flex;
@@ -562,10 +562,6 @@
     return Math.abs(val) < deadZone ? 0 : val;
   }
 
-  function getValueOrDefault(smoothVal, val) {
-    return val || smoothVal;
-  }
-
   // ---- Full-Body Avatar Rigging Class ----
   class AvatarRig {
     constructor() {
@@ -583,12 +579,12 @@
       if (!this.vrm || !rotation) return;
       const boneNodeName = THREE_VRM.VRMSchema.HumanoidBoneName[boneName];
       if (!boneNodeName) return;
-      const bone = this.vrm.humanoid.getBoneNode(boneNodeName);
+      const bone = this.vrm.humanoid ? this.vrm.humanoid.getBoneNode(boneNodeName) : null;
       if (!bone) return;
 
-      const x = applyDeadZone(rotation.x);
-      const y = applyDeadZone(rotation.y);
-      const z = applyDeadZone(rotation.z);
+      const x = applyDeadZone(rotation.x || 0);
+      const y = applyDeadZone(rotation.y || 0);
+      const z = applyDeadZone(rotation.z || 0);
 
       const euler = new THREE.Euler(x * multiplier, y * multiplier, z * multiplier, rotation.rotationOrder || "XYZ");
       const targetQuat = new THREE.Quaternion().setFromEuler(euler);
@@ -597,38 +593,46 @@
 
     rigFace(faceResult) {
       if (!this.vrm || !faceResult) return;
-      this.rigRotation("Neck", faceResult.head, 0.7);
+
+      if (faceResult.head) {
+        this.rigRotation("Neck", faceResult.head, 0.7);
+      }
 
       const blendShapeProxy = this.vrm.blendShapeProxy;
       const PresetName = THREE_VRM.VRMSchema.BlendShapePresetName;
 
       if (blendShapeProxy) {
-        const blinkL = 1 - faceResult.eye.l;
-        const blinkR = 1 - faceResult.eye.r;
-        blendShapeProxy.setValue(PresetName.BlinkL, blinkL);
-        blendShapeProxy.setValue(PresetName.BlinkR, blinkR);
-
         const lerpFn = Kalidokit.Vector.lerp;
         const alpha = 0.5;
 
-        blendShapeProxy.setValue(PresetName.A, lerpFn(blendShapeProxy.getValue(PresetName.A), faceResult.mouth.shape.A, alpha));
-        blendShapeProxy.setValue(PresetName.I, lerpFn(blendShapeProxy.getValue(PresetName.I), faceResult.mouth.shape.I, alpha));
-        blendShapeProxy.setValue(PresetName.U, lerpFn(blendShapeProxy.getValue(PresetName.U), faceResult.mouth.shape.U, alpha));
-        blendShapeProxy.setValue(PresetName.E, lerpFn(blendShapeProxy.getValue(PresetName.E), faceResult.mouth.shape.E, alpha));
-        blendShapeProxy.setValue(PresetName.O, lerpFn(blendShapeProxy.getValue(PresetName.O), faceResult.mouth.shape.O, alpha));
+        if (faceResult.eye) {
+          const blinkL = 1 - (faceResult.eye.l ?? 0);
+          const blinkR = 1 - (faceResult.eye.r ?? 0);
+          blendShapeProxy.setValue(PresetName.BlinkL, blinkL);
+          blendShapeProxy.setValue(PresetName.BlinkR, blinkR);
+        }
 
-        const joy = 0.7 * faceResult.mouth.shape.I;
-        blendShapeProxy.setValue(PresetName.Joy, lerpFn(blendShapeProxy.getValue(PresetName.Joy) || 0, joy, alpha));
-        try {
-          blendShapeProxy.setValue(PresetName.Fun, lerpFn(blendShapeProxy.getValue(PresetName.Fun) || 0, joy, alpha));
-        } catch (e) {}
+        if (faceResult.mouth && faceResult.mouth.shape) {
+          const shape = faceResult.mouth.shape;
+          blendShapeProxy.setValue(PresetName.A, lerpFn(blendShapeProxy.getValue(PresetName.A) || 0, shape.A || 0, alpha));
+          blendShapeProxy.setValue(PresetName.I, lerpFn(blendShapeProxy.getValue(PresetName.I) || 0, shape.I || 0, alpha));
+          blendShapeProxy.setValue(PresetName.U, lerpFn(blendShapeProxy.getValue(PresetName.U) || 0, shape.U || 0, alpha));
+          blendShapeProxy.setValue(PresetName.E, lerpFn(blendShapeProxy.getValue(PresetName.E) || 0, shape.E || 0, alpha));
+          blendShapeProxy.setValue(PresetName.O, lerpFn(blendShapeProxy.getValue(PresetName.O) || 0, shape.O || 0, alpha));
+
+          const joy = 0.7 * (shape.I || 0);
+          blendShapeProxy.setValue(PresetName.Joy, lerpFn(blendShapeProxy.getValue(PresetName.Joy) || 0, joy, alpha));
+          try {
+            blendShapeProxy.setValue(PresetName.Fun, lerpFn(blendShapeProxy.getValue(PresetName.Fun) || 0, joy, alpha));
+          } catch (e) {}
+        }
       }
 
-      if (this.vrm.lookAt) {
+      if (this.vrm.lookAt && faceResult.pupil) {
         const lerpFn = Kalidokit.Vector.lerp;
         const lookTarget = new THREE.Euler(
-          lerpFn(this.oldLookTarget.x, faceResult.pupil.y, 0.4),
-          lerpFn(this.oldLookTarget.y, faceResult.pupil.x, 0.4),
+          lerpFn(this.oldLookTarget.x, faceResult.pupil.y || 0, 0.4),
+          lerpFn(this.oldLookTarget.y, faceResult.pupil.x || 0, 0.4),
           0,
           "XYZ"
         );
@@ -640,13 +644,13 @@
     rigPose(poseResult) {
       if (!this.vrm || !poseResult) return;
 
-      // 1. Root / Hips Motion (Crouching, Turning, Root Displacement)
+      // 1. Root / Hips Motion
       if (poseResult.Hips) {
         if (poseResult.Hips.rotation) {
           this.rigRotation("Hips", poseResult.Hips.rotation, 0.7, 0.7);
         }
         if (poseResult.Hips.position) {
-          const hipsBone = this.vrm.humanoid.getBoneNode(THREE_VRM.VRMSchema.HumanoidBoneName.Hips);
+          const hipsBone = this.vrm.humanoid ? this.vrm.humanoid.getBoneNode(THREE_VRM.VRMSchema.HumanoidBoneName.Hips) : null;
           if (hipsBone) {
             if (!this.hipsRestPosition) {
               this.hipsRestPosition = hipsBone.position.clone();
@@ -660,24 +664,26 @@
       }
 
       // 2. Torso / Spine & Chest
-      this.rigRotation("Chest", poseResult.Spine, 0.25, 0.6);
-      this.rigRotation("Spine", poseResult.Spine, 0.35, 0.6);
+      if (poseResult.Spine) {
+        this.rigRotation("Chest", poseResult.Spine, 0.25, 0.6);
+        this.rigRotation("Spine", poseResult.Spine, 0.35, 0.6);
+      }
 
       // 3. Shoulders / Clavicles
       if (poseResult.RightShoulder) this.rigRotation("RightShoulder", poseResult.RightShoulder, 0.5, 0.6);
       if (poseResult.LeftShoulder) this.rigRotation("LeftShoulder", poseResult.LeftShoulder, 0.5, 0.6);
 
       // 4. Arms & Elbows
-      this.rigRotation("RightUpperArm", poseResult.RightUpperArm, 1, 0.8);
-      this.rigRotation("RightLowerArm", poseResult.RightLowerArm, 1, 0.8);
-      this.rigRotation("LeftUpperArm", poseResult.LeftUpperArm, 1, 0.8);
-      this.rigRotation("LeftLowerArm", poseResult.LeftLowerArm, 1, 0.8);
+      if (poseResult.RightUpperArm) this.rigRotation("RightUpperArm", poseResult.RightUpperArm, 1, 0.8);
+      if (poseResult.RightLowerArm) this.rigRotation("RightLowerArm", poseResult.RightLowerArm, 1, 0.8);
+      if (poseResult.LeftUpperArm) this.rigRotation("LeftUpperArm", poseResult.LeftUpperArm, 1, 0.8);
+      if (poseResult.LeftLowerArm) this.rigRotation("LeftLowerArm", poseResult.LeftLowerArm, 1, 0.8);
 
-      // 5. Legs & Knees (Lower Body Motion)
-      this.rigRotation("RightUpperLeg", poseResult.RightUpperLeg, 1, 0.8);
-      this.rigRotation("RightLowerLeg", poseResult.RightLowerLeg, 1, 0.8);
-      this.rigRotation("LeftUpperLeg", poseResult.LeftUpperLeg, 1, 0.8);
-      this.rigRotation("LeftLowerLeg", poseResult.LeftLowerLeg, 1, 0.8);
+      // 5. Legs & Knees
+      if (poseResult.RightUpperLeg) this.rigRotation("RightUpperLeg", poseResult.RightUpperLeg, 1, 0.8);
+      if (poseResult.RightLowerLeg) this.rigRotation("RightLowerLeg", poseResult.RightLowerLeg, 1, 0.8);
+      if (poseResult.LeftUpperLeg) this.rigRotation("LeftUpperLeg", poseResult.LeftUpperLeg, 1, 0.8);
+      if (poseResult.LeftLowerLeg) this.rigRotation("LeftLowerLeg", poseResult.LeftLowerLeg, 1, 0.8);
 
       // 6. Feet / Ankles
       if (poseResult.RightFoot) this.rigRotation("RightFoot", poseResult.RightFoot, 1, 0.8);
@@ -826,80 +832,78 @@
   let smoothedValues = { face: null, pose: null, leftHand: null, rightHand: null };
 
   function processHolisticResults(results) {
-    const trackingFlags = [];
-    const faceLandmarks = results.faceLandmarks;
-    const worldLandmarks = results.ea || results.poseWorldLandmarks;
-    const poseLandmarks = results.poseLandmarks;
-    const rightHandLandmarks = results.rightHandLandmarks;
-    const leftHandLandmarks = results.leftHandLandmarks;
+    try {
+      const trackingFlags = [];
+      const faceLandmarks = results.faceLandmarks;
+      const worldLandmarks = results.ea || results.poseWorldLandmarks;
+      const poseLandmarks = results.poseLandmarks;
+      const rightHandLandmarks = results.rightHandLandmarks;
+      const leftHandLandmarks = results.leftHandLandmarks;
 
-    // 1. Solve Face
-    if (faceLandmarks) {
-      trackingFlags.push("Face ✓");
-      const faceResult = Kalidokit.Face.solve(faceLandmarks, {
-        runtime: "mediapipe",
-        video: videoEl,
-        smoothBlink: false,
-        blinkSettings: [0.25, 0.75]
-      });
-      if (faceResult) {
-        const eye = { l: faceResult.eye.l, r: faceResult.eye.r };
-        smoothedValues.face = smoothedValues.face ? {
-          head: getValueOrDefault(smoothedValues.face.head, faceResult.head),
-          eye: eye,
-          mouth: faceResult.mouth,
-          pupil: faceResult.pupil,
-          brow: faceResult.brow
-        } : faceResult;
-        avatarRig.rigFace(smoothedValues.face);
+      // 1. Solve Face
+      if (faceLandmarks && videoEl.videoWidth > 0) {
+        const faceResult = Kalidokit.Face.solve(faceLandmarks, {
+          runtime: "mediapipe",
+          video: videoEl,
+          smoothBlink: false,
+          blinkSettings: [0.25, 0.75]
+        });
+        if (faceResult) {
+          trackingFlags.push("Face ✓");
+          smoothedValues.face = faceResult;
+          avatarRig.rigFace(smoothedValues.face);
+        }
       }
-    }
 
-    // 2. Solve Full Body Pose (with enableLegs: true)
-    if (poseLandmarks && worldLandmarks) {
-      trackingFlags.push("FullBody ✓");
-      const poseResult = Kalidokit.Pose.solve(worldLandmarks, poseLandmarks, {
-        runtime: "mediapipe",
-        video: videoEl,
-        enableLegs: true
-      });
-      if (poseResult) {
-        smoothedValues.pose = poseResult;
-        avatarRig.rigPose(poseResult);
+      // 2. Solve Full Body Pose
+      if (poseLandmarks && worldLandmarks) {
+        const poseResult = Kalidokit.Pose.solve(worldLandmarks, poseLandmarks, {
+          runtime: "mediapipe",
+          video: videoEl,
+          enableLegs: true
+        });
+        if (poseResult) {
+          trackingFlags.push("FullBody ✓");
+          smoothedValues.pose = poseResult;
+          avatarRig.rigPose(poseResult);
+        }
       }
-    }
 
-    // 3. Solve Hands
-    if (rightHandLandmarks) {
-      trackingFlags.push("R-Hand ✓");
-      const handResult = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
-      if (handResult) {
-        smoothedValues.rightHand = handResult;
-        avatarRig.rigHand("right", handResult, smoothedValues.pose);
+      // 3. Solve Hands
+      if (rightHandLandmarks) {
+        const handResult = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
+        if (handResult) {
+          trackingFlags.push("R-Hand ✓");
+          smoothedValues.rightHand = handResult;
+          avatarRig.rigHand("right", handResult, smoothedValues.pose);
+        }
       }
-    }
 
-    if (leftHandLandmarks) {
-      trackingFlags.push("L-Hand ✓");
-      const handResult = Kalidokit.Hand.solve(leftHandLandmarks, "Left");
-      if (handResult) {
-        smoothedValues.leftHand = handResult;
-        avatarRig.rigHand("left", handResult, smoothedValues.pose);
+      if (leftHandLandmarks) {
+        const handResult = Kalidokit.Hand.solve(leftHandLandmarks, "Left");
+        if (handResult) {
+          trackingFlags.push("L-Hand ✓");
+          smoothedValues.leftHand = handResult;
+          avatarRig.rigHand("left", handResult, smoothedValues.pose);
+        }
       }
-    }
 
-    // UI Status Updates
-    if (trackingFlags.length > 0) {
-      statusDot.className = 'status-dot live';
-      statusText.textContent = isVideoFilePlaying ? 'Processing Video File' : 'Tracking Active';
-      trackingStatusBadge.textContent = trackingFlags.join(" | ");
-    } else {
-      statusDot.className = 'status-dot idle';
-      statusText.textContent = 'Searching Target...';
-      trackingStatusBadge.textContent = 'Tracking: Searching';
-    }
+      // UI Status Updates
+      if (trackingFlags.length > 0) {
+        statusDot.className = 'status-dot live';
+        statusText.textContent = isVideoFilePlaying ? 'Processing Video File' : 'Tracking Active';
+        trackingStatusBadge.textContent = trackingFlags.join(" | ");
+      } else {
+        statusDot.className = 'status-dot idle';
+        statusText.textContent = 'Searching Target...';
+        trackingStatusBadge.textContent = 'Tracking: Searching';
+      }
 
-    drawLandmarksOverlay(results);
+      drawLandmarksOverlay(results);
+    } catch (err) {
+      console.error("Tracking Processing Error:", err);
+      trackingStatusBadge.textContent = "Tracking: Error";
+    }
   }
 
   // ---- Full Body 2D Skeleton Canvas Overlay ----
@@ -971,6 +975,11 @@
   // ---- Initialize MediaPipe Holistic ----
   async function initTrackingPipeline() {
     loadingText.textContent = "Initializing Full-Body AI...";
+
+    if (window.location.protocol === 'file:') {
+      errorBox.textContent = "⚠️ Notice: Running via file:// protocol. Webcams and WASM models require a local server (e.g. VS Code Live Server or http://localhost) to work properly.";
+    }
+
     holisticInstance = new Holistic({
       locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/${file}`
     });
@@ -990,10 +999,14 @@
 
     try {
       await cameraUtilsInstance.start();
+      await videoEl.play().catch(() => {});
       statusText.textContent = "Camera Live";
+      trackingStatusBadge.textContent = "Tracking: Searching";
     } catch (camErr) {
       console.warn("Camera start warning:", camErr);
-      statusText.textContent = "No Live Camera";
+      statusText.textContent = "No Live Camera / Blocked";
+      trackingStatusBadge.textContent = "Tracking: Camera Error";
+      errorBox.textContent = "Camera access error: " + camErr.message + ". Check permissions or run on http://localhost.";
     }
   }
 
@@ -1127,7 +1140,7 @@
 
     if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(file);
-    
+
     videoEl.srcObject = null;
     videoEl.src = currentObjectURL;
     videoEl.loop = true;
@@ -1150,6 +1163,7 @@
     btnCamera.classList.add('hidden');
     fileNameDisplay.textContent = "";
     await cameraUtilsInstance.start();
+    await videoEl.play().catch(() => {});
     statusText.textContent = "Camera Live";
   });
 
