@@ -575,16 +575,46 @@
       this.hipsRestPosition = null;
     }
 
-    rigRotation(boneName, rotation = { x: 0, y: 0, z: 0 }, multiplier = 1, lerpAmount = CONFIG.tracking.defaultLerpAmount) {
+    // Helper to find VRM bone node across schema and name variations
+    getBone(boneName) {
+      if (!this.vrm || !this.vrm.humanoid) return null;
+
+      // 1. Try schema lookup (e.g. "LeftIndexProximal" -> "leftIndexProximal")
+      const schemaName = THREE_VRM.VRMSchema.HumanoidBoneName[boneName];
+      if (schemaName) {
+        const bone = this.vrm.humanoid.getBoneNode(schemaName);
+        if (bone) return bone;
+      }
+
+      // 2. Try direct camelCase
+      const camelName = boneName.charAt(0).toLowerCase() + boneName.slice(1);
+      const boneDirect = this.vrm.humanoid.getBoneNode(camelName);
+      if (boneDirect) return boneDirect;
+
+      // 3. Fallback for thumb metacarpal / proximal naming variations
+      if (boneName.includes("ThumbProximal")) {
+        const metaName = boneName.replace("ThumbProximal", "ThumbMetacarpal");
+        const metaSchema = THREE_VRM.VRMSchema.HumanoidBoneName[metaName];
+        if (metaSchema) {
+          const b = this.vrm.humanoid.getBoneNode(metaSchema);
+          if (b) return b;
+        }
+      }
+      return null;
+    }
+
+    rigRotation(boneName, rotation = { x: 0, y: 0, z: 0 }, multiplier = 1, lerpAmount = CONFIG.tracking.defaultLerpAmount, applyDeadzone = true) {
       if (!this.vrm || !rotation) return;
-      const boneNodeName = THREE_VRM.VRMSchema.HumanoidBoneName[boneName];
-      if (!boneNodeName) return;
-      const bone = this.vrm.humanoid ? this.vrm.humanoid.getBoneNode(boneNodeName) : null;
+      const bone = this.getBone(boneName);
       if (!bone) return;
 
-      const x = applyDeadZone(rotation.x || 0);
-      const y = applyDeadZone(rotation.y || 0);
-      const z = applyDeadZone(rotation.z || 0);
+      const rawX = rotation.x || 0;
+      const rawY = rotation.y || 0;
+      const rawZ = rotation.z || 0;
+
+      const x = applyDeadzone ? applyDeadZone(rawX) : rawX;
+      const y = applyDeadzone ? applyDeadZone(rawY) : rawY;
+      const z = applyDeadzone ? applyDeadZone(rawZ) : rawZ;
 
       const euler = new THREE.Euler(x * multiplier, y * multiplier, z * multiplier, rotation.rotationOrder || "XYZ");
       const targetQuat = new THREE.Quaternion().setFromEuler(euler);
@@ -650,7 +680,7 @@
           this.rigRotation("Hips", poseResult.Hips.rotation, 0.7, 0.7);
         }
         if (poseResult.Hips.position) {
-          const hipsBone = this.vrm.humanoid ? this.vrm.humanoid.getBoneNode(THREE_VRM.VRMSchema.HumanoidBoneName.Hips) : null;
+          const hipsBone = this.getBone("Hips");
           if (hipsBone) {
             if (!this.hipsRestPosition) {
               this.hipsRestPosition = hipsBone.position.clone();
@@ -694,23 +724,24 @@
       if (!this.vrm || !handResult) return;
       const sidePrefix = side === "left" ? "Left" : "Right";
 
-      this.rigRotation(`${sidePrefix}Hand`, {
-        z: poseResult?.[`${sidePrefix}Hand`]?.z || 0,
-        y: handResult[`${sidePrefix}Wrist`]?.y || 0,
-        x: handResult[`${sidePrefix}Wrist`]?.x || 0
-      }, 1, 0.8);
+      // Rig wrist / hand base rotation
+      const wristKey = `${sidePrefix}Wrist`;
+      const handPoseKey = `${sidePrefix}Hand`;
+      
+      if (handResult[wristKey]) {
+        this.rigRotation(handPoseKey, {
+          x: handResult[wristKey].x || 0,
+          y: handResult[wristKey].y || 0,
+          z: poseResult?.[handPoseKey]?.z || handResult[wristKey].z || 0
+        }, 1, 0.8, false);
+      }
 
-      const joints = ["Proximal", "Intermediate", "Distal"];
-      const fingers = ["Ring", "Index", "Middle", "Thumb", "Little"];
-
-      fingers.forEach(finger => {
-        joints.forEach(joint => {
-          const jointName = `${sidePrefix}${finger}${joint}`;
-          if (handResult[jointName]) {
-            this.rigRotation(jointName, handResult[jointName], 1, 0.8);
-          }
-        });
-      });
+      // Rig all individual finger joints (Proximal, Intermediate, Distal for Thumb, Index, Middle, Ring, Little)
+      for (const [key, rotation] of Object.entries(handResult)) {
+        if (key.endsWith("Wrist") || !rotation) continue;
+        // Apply finger rotations directly without deadzone filtering
+        this.rigRotation(key, rotation, 1.1, 0.85, false);
+      }
     }
 
     update(delta) {
@@ -869,7 +900,7 @@
         }
       }
 
-      // 3. Solve Hands
+      // 3. Solve Right Hand & Fingers
       if (rightHandLandmarks) {
         const handResult = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
         if (handResult) {
@@ -879,6 +910,7 @@
         }
       }
 
+      // 4. Solve Left Hand & Fingers
       if (leftHandLandmarks) {
         const handResult = Kalidokit.Hand.solve(leftHandLandmarks, "Left");
         if (handResult) {
