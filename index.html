@@ -352,7 +352,6 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1635989137/holistic.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1/dist/kalidokit.umd.js"></script>
   <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </head>
@@ -487,7 +486,7 @@
   // ---- Config & Mocap Parameters ----
   const CONFIG = {
     vrmUrl: "https://cdn.jsdelivr.net/gh/pixiv/three-vrm@0.6.11/packages/three-vrm/examples/models/AliciaSolid.vrm",
-    camera: { width: 640, height: 480, facingMode: "user" },
+    camera: { width: 640, height: 480 },
     tracking: { smoothAmount: 0.1, deadZone: 0.002, defaultLerpAmount: 0.7 },
     holistic: {
       modelComplexity: 1,
@@ -543,15 +542,16 @@
   // ---- Application State ----
   let mirrorVideo = true;
   let showSkeleton = true;
-  let useCamera = true;
   let isVideoFilePlaying = false;
   let currentObjectURL = null;
-  let cameraUtilsInstance = null;
   let holisticInstance = null;
   let currentVrm = null;
   let currentVrmScene = null;
   let avatarRig = null;
   let appInitialized = false;
+
+  let isTrackingLoopRunning = false;
+  let isProcessingFrame = false;
 
   let peer = null;
   let activeCall = null;
@@ -572,7 +572,7 @@
 
     setVRM(vrm) {
       this.vrm = vrm;
-      this.hipsRestPosition = null; // Reset captured hips rest position for new model
+      this.hipsRestPosition = null;
     }
 
     rigRotation(boneName, rotation = { x: 0, y: 0, z: 0 }, multiplier = 1, lerpAmount = CONFIG.tracking.defaultLerpAmount) {
@@ -972,6 +972,78 @@
     }
   }
 
+  // ---- Unified Native Frame Processing Loop ----
+  function startTrackingLoop() {
+    if (isTrackingLoopRunning) return;
+    isTrackingLoopRunning = true;
+    requestAnimationFrame(trackingLoopStep);
+  }
+
+  async function trackingLoopStep() {
+    if (!isTrackingLoopRunning) return;
+
+    if (
+      !isProcessingFrame &&
+      videoEl &&
+      !videoEl.paused &&
+      !videoEl.ended &&
+      videoEl.readyState >= 2 &&
+      videoEl.videoWidth > 0
+    ) {
+      isProcessingFrame = true;
+      try {
+        await holisticInstance.send({ image: videoEl });
+      } catch (e) {
+        console.warn("Holistic frame send error:", e);
+      } finally {
+        isProcessingFrame = false;
+      }
+    }
+    requestAnimationFrame(trackingLoopStep);
+  }
+
+  function stopCurrentVideoSource() {
+    if (videoEl.srcObject) {
+      const stream = videoEl.srcObject;
+      if (stream && stream.getTracks) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      videoEl.srcObject = null;
+    }
+    if (currentObjectURL) {
+      URL.revokeObjectURL(currentObjectURL);
+      currentObjectURL = null;
+    }
+    videoEl.src = "";
+  }
+
+  // ---- Start Live Webcam Stream ----
+  async function startWebcam() {
+    stopCurrentVideoSource();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: false
+      });
+      videoEl.srcObject = stream;
+      videoEl.muted = true;
+      await videoEl.play();
+      isVideoFilePlaying = false;
+      statusText.textContent = "Camera Live";
+      trackingStatusBadge.textContent = "Tracking: Searching";
+      startTrackingLoop();
+    } catch (err) {
+      console.error("Camera access error:", err);
+      statusText.textContent = "Camera Access Error";
+      trackingStatusBadge.textContent = "Tracking: Camera Error";
+      errorBox.textContent = "Webcam access error: " + err.message + ". Check camera permissions or ensure you are running on http://localhost.";
+    }
+  }
+
   // ---- Initialize MediaPipe Holistic ----
   async function initTrackingPipeline() {
     loadingText.textContent = "Initializing Full-Body AI...";
@@ -987,27 +1059,7 @@
     holisticInstance.setOptions(CONFIG.holistic);
     holisticInstance.onResults(processHolisticResults);
 
-    cameraUtilsInstance = new Camera(videoEl, {
-      onFrame: async () => {
-        if (!isVideoFilePlaying && videoEl.readyState >= 2) {
-          await holisticInstance.send({ image: videoEl });
-        }
-      },
-      width: CONFIG.camera.width,
-      height: CONFIG.camera.height
-    });
-
-    try {
-      await cameraUtilsInstance.start();
-      await videoEl.play().catch(() => {});
-      statusText.textContent = "Camera Live";
-      trackingStatusBadge.textContent = "Tracking: Searching";
-    } catch (camErr) {
-      console.warn("Camera start warning:", camErr);
-      statusText.textContent = "No Live Camera / Blocked";
-      trackingStatusBadge.textContent = "Tracking: Camera Error";
-      errorBox.textContent = "Camera access error: " + camErr.message + ". Check permissions or run on http://localhost.";
-    }
+    await startWebcam();
   }
 
   function setVrmOpacity(val) {
@@ -1021,16 +1073,6 @@
           });
         }
       });
-    }
-  }
-
-  // ---- Video File Processing Loop ----
-  async function processVideoFileFrame() {
-    if (isVideoFilePlaying && !videoEl.paused && !videoEl.ended) {
-      if (videoEl.readyState >= 2) {
-        await holisticInstance.send({ image: videoEl });
-      }
-      requestAnimationFrame(processVideoFileFrame);
     }
   }
 
@@ -1062,13 +1104,13 @@
       call.answer();
       activeCall = call;
       call.on('stream', (stream) => {
-        if (cameraUtilsInstance) cameraUtilsInstance.stop();
+        stopCurrentVideoSource();
         isVideoFilePlaying = false;
         videoEl.srcObject = stream;
-        videoEl.play();
-        useCamera = false;
+        videoEl.play().catch(() => {});
         btnCamera.classList.remove('hidden');
         statusText.textContent = 'Phone camera active';
+        startTrackingLoop();
       });
     });
 
@@ -1136,35 +1178,30 @@
     const file = e.target.files[0];
     if (!file) return;
 
-    if (cameraUtilsInstance) cameraUtilsInstance.stop();
+    stopCurrentVideoSource();
 
-    if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(file);
-
     videoEl.srcObject = null;
     videoEl.src = currentObjectURL;
     videoEl.loop = true;
     videoEl.muted = true;
-    videoEl.play();
 
-    isVideoFilePlaying = true;
-    btnCamera.classList.remove('hidden');
-    fileNameDisplay.textContent = file.name;
-    statusText.textContent = 'Playing MP4 File';
-
-    videoEl.onplay = () => processVideoFileFrame();
+    videoEl.play().then(() => {
+      isVideoFilePlaying = true;
+      btnCamera.classList.remove('hidden');
+      fileNameDisplay.textContent = file.name;
+      statusText.textContent = 'Playing MP4 File';
+      startTrackingLoop();
+    }).catch(err => {
+      console.error("Video play error:", err);
+    });
   });
 
   // Return to Live Webcam
   btnCamera.addEventListener('click', async () => {
-    isVideoFilePlaying = false;
-    if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
-    videoEl.src = "";
     btnCamera.classList.add('hidden');
     fileNameDisplay.textContent = "";
-    await cameraUtilsInstance.start();
-    await videoEl.play().catch(() => {});
-    statusText.textContent = "Camera Live";
+    await startWebcam();
   });
 
   btnLoadVrm.addEventListener('click', () => vrmInput.click());
